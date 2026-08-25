@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neon3-sdk"
+version = "0.1.0"
+description = "Public Python client SDK for the Neon3 control-plane protocol."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT OR Apache-2.0" }
+authors = [{ name = "Neon3" }]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+]
+
+[project.scripts]
+neon3-sdk = "neon3_sdk.cli:main"
+neon3-component-gallery-probe = "neon3_sdk.bin.component_gallery_probe:main"
+neon3-api-contract-probe = "neon3_sdk.bin.api_contract_probe:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+neon3_sdk = ["fixtures/*.nui"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

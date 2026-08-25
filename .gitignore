@@ -1,0 +1,9 @@
+node_modules/
+packages/*/dist/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.log
+*.tmp
+.DS_Store
+Thumbs.db

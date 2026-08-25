@@ -1,0 +1,32 @@
+version 1
+surface calculator column w 560 h 420 gap 12 pad 20 align stretch fill #20252B
+flow calculator
+budget nodes=40 bindings=16 instances=40 text=32 glyphs=1024 events=20 clips=40
+input display f32 default 0
+input accumulator f32 default 0
+input pending f32 default 0
+input operation enum:add|subtract|multiply|divide default add
+  panel display-panel column h 108 pad 14 gap 8 align stretch fill #303740 line #596675
+    text title value "Node Calculator"
+    progress_bar result h 42 numeric $display value "0"
+  panel keypad column grow 1 gap 10
+    panel row-one row h 52 gap 10 align stretch
+      button one w 112 h 52 value "1" event calculator.number.one
+      button two w 112 h 52 value "2" event calculator.number.two
+      button three w 112 h 52 value "3" event calculator.number.three
+      button add w 112 h 52 value "ADD" event calculator.operator.add
+    panel row-two row h 52 gap 10 align stretch
+      button four w 112 h 52 value "4" event calculator.number.four
+      button five w 112 h 52 value "5" event calculator.number.five
+      button six w 112 h 52 value "6" event calculator.number.six
+      button subtract w 112 h 52 value "SUB" event calculator.operator.subtract
+    panel row-three row h 52 gap 10 align stretch
+      button seven w 112 h 52 value "7" event calculator.number.seven
+      button eight w 112 h 52 value "8" event calculator.number.eight
+      button nine w 112 h 52 value "9" event calculator.number.nine
+      button multiply w 112 h 52 value "MUL" event calculator.operator.multiply
+    panel row-four row h 52 gap 10 align stretch
+      button clear w 112 h 52 value "CLEAR" event calculator.clear
+      button zero w 112 h 52 value "0" event calculator.number.zero
+      button equals w 112 h 52 value "ENTER" event calculator.equals
+      button divide w 112 h 52 value "DIV" event calculator.operator.divide
