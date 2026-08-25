@@ -19,6 +19,7 @@ from .client import NeonClient
 from .errors import NeonError
 from .models import AssetRef
 from .nui import ComponentGallery
+from .runtime import default_neon_root
 
 
 @dataclass(frozen=True)
@@ -34,19 +35,28 @@ class NeonDevelopmentSession:
 
     def __init__(self, neon_root: Path, eventd_endpoint: str, ui_endpoint: str, wgpu_endpoint: str, *, windowed: bool = False) -> None:
         self.neon_root = neon_root.resolve()
-        debug = self.neon_root / "target" / "debug"
+        runtime_dir = next(
+            (
+                self.neon_root / "target" / profile
+                for profile in ("release", "debug")
+                if all((self.neon_root / "target" / profile / name).is_file() for name in ("neon-eventd.exe", "neon-wgpu-runtime.exe", "neon-ui-runtime.exe"))
+            ),
+            None,
+        )
+        if runtime_dir is None:
+            raise FileNotFoundError(f"Neon3 release/debug binaries not found under {self.neon_root}")
         self.specs = (
-            ServiceSpec("eventd", eventd_endpoint, debug / "neon-eventd.exe", ("--server", eventd_endpoint, "1")),
+            ServiceSpec("eventd", eventd_endpoint, runtime_dir / "neon-eventd.exe", ("--server", eventd_endpoint, "1")),
             ServiceSpec(
                 "wgpu-runtime",
                 wgpu_endpoint,
-                debug / "neon-wgpu-runtime.exe",
+                runtime_dir / "neon-wgpu-runtime.exe",
                 ("--window-server", wgpu_endpoint, ui_endpoint) if windowed else ("--headless-server", wgpu_endpoint),
             ),
             ServiceSpec(
                 "ui-runtime",
                 ui_endpoint,
-                debug / "neon-ui-runtime.exe",
+                runtime_dir / "neon-ui-runtime.exe",
                 ("--forward-server", ui_endpoint, wgpu_endpoint, "127.0.0.1:39104", "--eventd", eventd_endpoint),
             ),
         )
@@ -125,7 +135,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     dev = subparsers.add_parser("dev", help="manage a local headless Neon3 service set")
     dev_commands = dev.add_subparsers(dest="dev_command", required=True)
     up = dev_commands.add_parser("up", help="start Neon3 services and communicate through the Python SDK")
-    up.add_argument("--neon-root", type=Path, default=Path("D:/Neon3"))
+    up.add_argument("--neon-root", type=Path, default=default_neon_root())
     up.add_argument("--eventd-endpoint", default="127.0.0.1:39101")
     up.add_argument("--ui-endpoint", default="127.0.0.1:39102")
     up.add_argument("--wgpu-endpoint", default="127.0.0.1:39103")
@@ -133,7 +143,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     up.add_argument("--gallery", action="store_true", help="submit Neon3's complete ImGui component-gallery NUI after startup")
     up.add_argument("--once", action="store_true", help="stop after health checks and optional gallery submission")
     calculator = subparsers.add_parser("calculator", help="run the Python-owned calculator protocol scenario")
-    calculator.add_argument("--neon-root", type=Path, default=Path("D:/Neon3"))
+    calculator.add_argument("--neon-root", type=Path, default=default_neon_root())
     calculator.add_argument("--eventd-endpoint", default="127.0.0.1:39101")
     calculator.add_argument("--ui-endpoint", default="127.0.0.1:39102")
     calculator.add_argument("--wgpu-endpoint", default="127.0.0.1:39103")

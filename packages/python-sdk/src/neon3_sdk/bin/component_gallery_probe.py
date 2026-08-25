@@ -19,6 +19,7 @@ from neon3_sdk.client import NeonClient
 from neon3_sdk.errors import NeonError
 from neon3_sdk.models import AssetRef
 from neon3_sdk.nui import ComponentGallery
+from neon3_sdk.runtime import default_neon_root
 
 
 def main() -> int:
@@ -28,11 +29,19 @@ def main() -> int:
     outcome = "failed"
     try:
         neon_root = args.neon_root.resolve()
+        runtime_dir = next(
+            (
+                neon_root / "target" / profile
+                for profile in ("release", "debug")
+                if all((neon_root / "target" / profile / name).is_file() for name in ("neon-eventd.exe", "neon-wgpu-runtime.exe", "neon-ui-runtime.exe"))
+            ),
+            neon_root / "target" / "release",
+        )
         executables = {
-            "eventd": neon_root / "target" / "debug" / "neon-eventd.exe",
-            "wgpu-runtime": neon_root / "target" / "debug" / "neon-wgpu-runtime.exe",
-            "ui-runtime": neon_root / "target" / "debug" / "neon-ui-runtime.exe",
-            "nui-flow-demo": neon_root / "target" / "debug" / "nui_flow_demo.exe",
+            "eventd": runtime_dir / "neon-eventd.exe",
+            "wgpu-runtime": runtime_dir / "neon-wgpu-runtime.exe",
+            "ui-runtime": runtime_dir / "neon-ui-runtime.exe",
+            "nui-flow-demo": runtime_dir / "nui_flow_demo.exe",
         }
         missing = [str(path) for path in executables.values() if not path.is_file()]
         if missing:
@@ -112,7 +121,7 @@ def main() -> int:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Submit and verify Neon3's complete ImGui component gallery.")
-    parser.add_argument("--neon-root", type=Path, default=Path("D:/Neon3"))
+    parser.add_argument("--neon-root", type=Path, default=default_neon_root())
     parser.add_argument("--eventd-endpoint", default="127.0.0.1:39101")
     parser.add_argument("--ui-endpoint", default="127.0.0.1:39102")
     parser.add_argument("--wgpu-endpoint", default="127.0.0.1:39103")

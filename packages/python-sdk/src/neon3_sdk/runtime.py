@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import enum
+import os
 import subprocess
 import time
 from pathlib import Path
@@ -10,6 +11,15 @@ from dataclasses import dataclass
 from typing import Any
 
 from .client import NeonClient
+
+
+def default_neon_root() -> Path:
+    """Return the SDK-local release directory unless the caller overrides it."""
+    override = os.environ.get("NEON_ROOT")
+    if override:
+        return Path(override)
+    sdk_root = Path(__file__).resolve().parents[4]
+    return sdk_root / "release"
 
 
 class RuntimeMode(str, enum.Enum):
@@ -27,7 +37,7 @@ class RuntimeEndpoints:
 
 @dataclass(frozen=True)
 class RuntimeConfig:
-    neon_root: str = "D:/Neon3"
+    neon_root: str = str(default_neon_root())
     mode: RuntimeMode = RuntimeMode.WINDOWED
     endpoints: RuntimeEndpoints = RuntimeEndpoints()
     domain_endpoint: str = "127.0.0.1:39104"
@@ -51,11 +61,20 @@ class RuntimeSession:
 
     def start(self) -> None:
         root = Path(self.config.neon_root)
-        debug = root / "target" / "debug"
+        runtime_dir = next(
+            (
+                root / "target" / profile
+                for profile in ("release", "debug")
+                if all((root / "target" / profile / name).is_file() for name in ("neon-eventd.exe", "neon-wgpu-runtime.exe", "neon-ui-runtime.exe"))
+            ),
+            None,
+        )
+        if runtime_dir is None:
+            raise FileNotFoundError(f"Neon3 release/debug binaries not found under {root}")
         specs = [
-            ("eventd", debug / "neon-eventd.exe", ("--server", self.config.endpoints.eventd, "1")),
-            ("wgpu-runtime", debug / "neon-wgpu-runtime.exe", self.config.wgpu_arguments),
-            ("ui-runtime", debug / "neon-ui-runtime.exe", ("--forward-server", self.config.endpoints.ui, self.config.endpoints.wgpu, self.config.domain_endpoint, "--eventd", self.config.endpoints.eventd)),
+            ("eventd", runtime_dir / "neon-eventd.exe", ("--server", self.config.endpoints.eventd, "1")),
+            ("wgpu-runtime", runtime_dir / "neon-wgpu-runtime.exe", self.config.wgpu_arguments),
+            ("ui-runtime", runtime_dir / "neon-ui-runtime.exe", ("--forward-server", self.config.endpoints.ui, self.config.endpoints.wgpu, self.config.domain_endpoint, "--eventd", self.config.endpoints.eventd)),
         ]
         try:
             for name, executable, arguments in specs:

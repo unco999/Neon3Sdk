@@ -42,13 +42,13 @@ Set `NEON_ROOT` only when intentionally using another runtime checkout. Use
 ```bash
 cd packages/python-sdk
 pip install -e .
-python -m neon3_sdk calculator --neon-root <path-to-neon3-runtime>
+python -m neon3_sdk calculator
 ```
 
 Run the deterministic `1 + 2 = 3` scenario:
 
 ```bash
-python -m neon3_sdk calculator --neon-root <path-to-neon3-runtime> --once
+python -m neon3_sdk calculator --once
 ```
 
 ### TypeScript / Node.js
@@ -91,8 +91,9 @@ and `ExternalSurface` negotiation. See each package's README for full API docs.
 
 The Neon3 runtime (Rust + WGPU) is maintained in a separate repository. It
 provides the `neon-wgpu-runtime`, `neon-ui-runtime`, and `neon-eventd` services
-that these SDKs connect to over loopback TCP. The `--neon-root` flag in the
-examples above points to a local checkout of that runtime.
+that these SDKs connect to over loopback TCP. When `--neon-root` is omitted, the
+examples use the SDK-local `release` directory. Set `NEON_ROOT` or pass
+`--neon-root <path>` only when overriding that default.
 
 ## License
 

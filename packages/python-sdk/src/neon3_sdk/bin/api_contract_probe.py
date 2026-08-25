@@ -11,12 +11,12 @@ from pathlib import Path
 from ..client import NeonClient
 from ..errors import NeonError
 from ..render import Camera3D, RenderClient, SurfaceKind, SurfaceOpen, SurfaceSize, SurfaceTarget, WorldInformation
-from ..runtime import RuntimeConfig, RuntimeEndpoints, RuntimeMode, RuntimeSession
+from ..runtime import RuntimeConfig, RuntimeEndpoints, RuntimeMode, RuntimeSession, default_neon_root
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--neon-root", type=Path, default=Path("D:/Neon3"))
+    parser.add_argument("--neon-root", type=Path, default=default_neon_root())
     parser.add_argument("--external-surface", action="store_true")
     args = parser.parse_args()
     run_id = str(uuid.uuid4())

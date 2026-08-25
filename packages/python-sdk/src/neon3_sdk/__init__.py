@@ -7,7 +7,7 @@ from .models import AssetRef, ClientIdentity, RpcResponse, ServiceDescription, S
 from .nui import ComponentGallery, GallerySubmission
 from .input import InputClient, KeyEvent
 from .render import Backend, BackendNegotiation, Camera3D, ColorSpace, ExternalSurface, RenderClient, SurfaceKind, SurfaceOpen, SurfaceSize, SurfaceTarget, WorldInformation, WorldPlacement
-from .runtime import RuntimeConfig, RuntimeEndpoints, RuntimeMode, RuntimeSession
+from .runtime import RuntimeConfig, RuntimeEndpoints, RuntimeMode, RuntimeSession, default_neon_root
 from .ui import UiClient, UiProgram
 
 __all__ = [
@@ -41,6 +41,7 @@ __all__ = [
     "RuntimeEndpoints",
     "RuntimeMode",
     "RuntimeSession",
+    "default_neon_root",
     "UiClient",
     "UiProgram",
     "WorldPlacement",

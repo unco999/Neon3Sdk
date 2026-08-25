@@ -9,7 +9,7 @@ import unittest
 from neon3_sdk import NeonClient, ProtocolError
 from neon3_sdk.calculator import CalculatorDomain
 from neon3_sdk.render import Backend, BackendNegotiation, Camera3D, PointerEvent, SurfaceKind, SurfaceOpen, SurfaceSize, WorldInformation
-from neon3_sdk.runtime import RuntimeConfig, RuntimeMode
+from neon3_sdk.runtime import RuntimeConfig, RuntimeMode, default_neon_root
 from neon3_sdk.cli import parse_args
 
 
@@ -28,6 +28,11 @@ class ClientWireTests(unittest.TestCase):
         self.assertEqual(RuntimeConfig(mode=RuntimeMode.WINDOWED).wgpu_arguments[0], "--window-server")
         self.assertEqual(RuntimeConfig(mode=RuntimeMode.HEADLESS).wgpu_arguments[0], "--headless-server")
         self.assertEqual(RuntimeConfig(mode=RuntimeMode.EXTERNAL_SURFACE).wgpu_arguments[0], "--window-server")
+
+    def test_calculator_defaults_to_sdk_release_directory(self) -> None:
+        args = parse_args(["calculator"])
+        self.assertEqual(args.neon_root, default_neon_root())
+        self.assertTrue(str(args.neon_root).endswith("release"))
 
     def test_python_domain_calculates_and_emits_revisioned_input_changes(self) -> None:
         domain = CalculatorDomain()
