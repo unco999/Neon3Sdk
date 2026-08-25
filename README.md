@@ -16,6 +16,27 @@ packages/
 
 ## Quick start
 
+### Windows: build the runtime and launch the example
+
+The SDK connects to the Neon3 runtime, so the runtime binaries are distributed as
+a small release bundle rather than embedded into the Node package. From PowerShell:
+
+```powershell
+.\scripts\build-neon3-release.ps1
+```
+
+This downloads the Neon3 source from GitHub, builds the three required services,
+and writes a runnable bundle to this SDK's `release` directory. No external
+Neon3 checkout is required. The default one-click case is:
+
+```text
+scripts\start-calculator.cmd
+```
+
+Set `NEON_ROOT` only when intentionally using another runtime checkout. Use
+`scripts\start-calculator-once.cmd` for the deterministic JSON result and set
+`NEON_PROFILE=debug` when using debug binaries.
+
 ### Python
 
 ```bash

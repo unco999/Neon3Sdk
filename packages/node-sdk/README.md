@@ -27,11 +27,18 @@ await renderer.submitCamera({
 ```
 
 `RuntimeSession` starts windowed, headless, or external-surface Neon3 services.
+Its `profile` can be `release`, `debug`, or `auto` (the default); `auto` selects
+release binaries when all required services are present and otherwise falls back
+to debug. The runtime must remain a bundle of cooperating processes because the
+WGPU service owns the window and GPU device.
 Native GPU handles are returned only as brokered descriptors and are never
 interpreted by the JavaScript layer.
 
 Run the real headless probe with `npm run probe`. Set `NEON_EXTERNAL=1` to run
 the Windows/DX12 external-surface probe instead.
+
+The default probe runtime is the SDK-local `../../release` directory. Set
+`NEON_ROOT` only when intentionally selecting another runtime directory.
 
 The keyboard method is capability-gated. Until Neon3 advertises
 `wgpu.ui.keyboard.v1`, `InputClient.keyboard()` returns the stable
@@ -49,7 +56,8 @@ src/examples/calculator/
   app.ts          process lifecycle and protocol wiring
 ```
 
-Run the visible example:
+Run the visible example. The SDK-local launcher builds `release/` from the
+official GitHub Neon3 repository on first run:
 
 ```powershell
 npm run calculator
@@ -59,6 +67,12 @@ Run the deterministic `1 + 1 = + 1 = 3` scenario:
 
 ```powershell
 npm run calculator:once
+```
+
+Verify the real multi-process runtime and emit JSONL diagnostics:
+
+```powershell
+npm run probe:runtime
 ```
 
 The application keeps the calculator domain in `domain.ts`; the RPC listener

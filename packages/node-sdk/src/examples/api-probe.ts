@@ -1,7 +1,8 @@
 import { NeonClient, RenderClient, RuntimeConfig, RuntimeSession, UiClient } from "../index.js";
+import { resolve } from "node:path";
 
 const external = process.env.NEON_EXTERNAL === "1";
-const config = { neonRoot: process.env.NEON_ROOT ?? "D:/Neon3", mode: (external ? "external_surface" : "headless") as RuntimeConfig["mode"] } satisfies RuntimeConfig;
+const config = { neonRoot: process.env.NEON_ROOT ?? resolve(process.cwd(), "../../release"), mode: (external ? "external_surface" : "headless") as RuntimeConfig["mode"] } satisfies RuntimeConfig;
 const session = new RuntimeSession(config);
 await session.start();
 try {
