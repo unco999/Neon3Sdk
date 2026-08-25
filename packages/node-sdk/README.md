@@ -34,8 +34,19 @@ WGPU service owns the window and GPU device.
 Native GPU handles are returned only as brokered descriptors and are never
 interpreted by the JavaScript layer.
 
-Run the real headless probe with `npm run probe`. Set `NEON_EXTERNAL=1` to run
-the Windows/DX12 external-surface probe instead.
+Run the real headless API probe with `npm run probe`. It starts the three Neon3
+services itself, so first build the SDK-local runtime bundle with
+`scripts\build-neon3-release.ps1`, or point it at a prepared checkout:
+
+```powershell
+$env:NEON_ROOT = "D:\path\to\Neon3-CiJian"
+$env:NEON_PROFILE = "debug"
+npm run probe
+```
+
+Set `NEON_EXTERNAL=1` to run the Windows/DX12 external-surface probe instead.
+`npm run probe:runtime` is the narrower lifecycle probe: it starts the same
+services and checks each health endpoint, without the API snapshot calls.
 
 The default probe runtime is the SDK-local `../../release` directory. Set
 `NEON_ROOT` only when intentionally selecting another runtime directory.

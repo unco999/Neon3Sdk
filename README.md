@@ -66,6 +66,24 @@ Run the headless API-contract probe:
 npm run probe
 ```
 
+`npm run probe` starts real Neon3 services and therefore needs the runtime
+binaries first. Build the SDK-local bundle with
+`scripts\build-neon3-release.ps1`, or deliberately test another checkout:
+
+```powershell
+$env:NEON_ROOT = "D:\path\to\Neon3-CiJian"
+$env:NEON_PROFILE = "debug"
+cd packages\node-sdk
+npm run probe
+```
+
+For the Python SDK, run its unit tests with:
+
+```bash
+cd packages/python-sdk
+python -m unittest discover -s tests -v
+```
+
 ## Packages
 
 | Package | Source | npm / PyPI | Protocol |
