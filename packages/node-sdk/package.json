@@ -1,6 +1,6 @@
 {
   "name": "@neon3/sdk",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Node.js and TypeScript SDK for the Neon3 control-plane protocol",
   "type": "module",
   "main": "./dist/index.js",
@@ -11,7 +11,10 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/copy-assets.mjs",
     "test": "npm run build && node --test dist/test/*.test.js",
@@ -20,10 +23,15 @@
     "calculator": "npm run build && node dist/examples/calculator/app.js",
     "calculator:once": "npm run build && node dist/examples/calculator/app.js --once"
   },
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18"
+  },
   "license": "MIT OR Apache-2.0",
   "devDependencies": {
     "@types/node": "^22.0.0",
     "typescript": "^5.6.0"
+  },
+  "dependencies": {
+    "undici": "^6.28.0"
   }
 }

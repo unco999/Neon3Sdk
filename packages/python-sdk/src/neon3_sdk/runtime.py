@@ -6,20 +6,49 @@ import enum
 import os
 import subprocess
 import time
+import urllib.request
+import zipfile
 from pathlib import Path
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from .client import NeonClient
 
+NEON3_RUNTIME_VERSION = "v0.2.1"
+NEON3_RUNTIME_REPOSITORY = "unco999/Neon3-CiJian"
+NEON3_RUNTIME_ASSET = f"neon3-runtime-windows-x86_64-{NEON3_RUNTIME_VERSION}.zip"
+
 
 def default_neon_root() -> Path:
-    """Return the SDK-local release directory unless the caller overrides it."""
+    """Return an explicit root, local SDK bundle, or per-user runtime cache."""
     override = os.environ.get("NEON_ROOT")
     if override:
         return Path(override)
     sdk_root = Path(__file__).resolve().parents[4]
-    return sdk_root / "release"
+    local_release = sdk_root / "release"
+    if _runtime_available(local_release):
+        return local_release
+    local_app_data = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+    return local_app_data / "Neon3Sdk" / "runtime" / NEON3_RUNTIME_VERSION
+
+
+def _runtime_available(root: Path) -> bool:
+    return all((root / "target" / "release" / name).is_file() for name in (
+        "neon-eventd.exe", "neon-wgpu-runtime.exe", "neon-ui-runtime.exe"
+    ))
+
+
+def _download_runtime(root: Path) -> None:
+    root.mkdir(parents=True, exist_ok=True)
+    archive = root.parent / f"{NEON3_RUNTIME_ASSET}.download"
+    url = f"https://github.com/{NEON3_RUNTIME_REPOSITORY}/releases/download/{NEON3_RUNTIME_VERSION}/{NEON3_RUNTIME_ASSET}"
+    try:
+        with urllib.request.urlopen(url, timeout=180) as response, archive.open("wb") as stream:
+            stream.write(response.read())
+        with zipfile.ZipFile(archive) as bundle:
+            bundle.extractall(root)
+    finally:
+        archive.unlink(missing_ok=True)
 
 
 class RuntimeMode(str, enum.Enum):
@@ -37,12 +66,12 @@ class RuntimeEndpoints:
 
 @dataclass(frozen=True)
 class RuntimeConfig:
-    neon_root: str = str(default_neon_root())
+    neon_root: str = field(default_factory=lambda: str(default_neon_root()))
     mode: RuntimeMode = RuntimeMode.WINDOWED
     endpoints: RuntimeEndpoints = RuntimeEndpoints()
     domain_endpoint: str = "127.0.0.1:39104"
     timeout_seconds: float = 15.0
-    profile: str = "auto"
+    profile: str = field(default_factory=lambda: os.environ.get("NEON_PROFILE", "auto"))
 
     @property
     def wgpu_arguments(self) -> tuple[str, ...]:
@@ -74,6 +103,15 @@ class RuntimeSession:
             ),
             None,
         )
+        can_download = (
+            runtime_dir is None
+            and self.config.profile.lower() in {"auto", "release"}
+            and not os.environ.get("NEON_ROOT")
+            and Path(self.config.neon_root) == default_neon_root()
+        )
+        if can_download:
+            _download_runtime(root)
+            runtime_dir = root / "target" / "release"
         if runtime_dir is None:
             raise FileNotFoundError(f"Neon3 release/debug binaries not found under {root}")
         specs = [

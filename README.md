@@ -1,122 +1,105 @@
 # Neon3 SDK
 
-Language clients for the [Neon3][] control-plane protocol (`neon3.rpc`).
+Python and Node.js clients for the [Neon3](https://github.com/unco999/Neon3-CiJian)
+control-plane protocols: `neon3.rpc` and `neon3.event`.
 
-Both SDKs speak the same canonical JSON-over-TCP framing (4 byte big-endian
-length prefix). Neither creates a window, owns a GPU resource, or writes project
-files — those remain the responsibility of the Neon3 runtime services.
+## Downloads
 
-## Repository layout
-
-```
-packages/
-  python-sdk/          Python package: neon3-sdk
-  node-sdk/            TypeScript/Node.js package: @neon3/sdk
-```
-
-## Quick start
-
-### Windows: build the runtime and launch the example
-
-The SDK connects to the Neon3 runtime, so the runtime binaries are distributed as
-a small release bundle rather than embedded into the Node package. From PowerShell:
+- Python: [neon3-sdk on PyPI](https://pypi.org/project/neon3-sdk/)
+- Node.js: [@neon3/sdk on npm](https://www.npmjs.com/package/@neon3/sdk)
+- Runtime: [Neon3 GitHub Releases](https://github.com/unco999/Neon3-CiJian/releases)
 
 ```powershell
-.\scripts\build-neon3-release.ps1
+python -m pip install --upgrade neon3-sdk
+npm install @neon3/sdk
 ```
 
-This downloads the Neon3 source from GitHub, builds the three required services,
-and writes a runnable bundle to this SDK's `release` directory. No external
-Neon3 checkout is required. The default one-click case is:
+## Runtime
 
-```text
-scripts\start-calculator.cmd
+The SDK starts the separate `neon-eventd`, `neon-wgpu-runtime`, and
+`neon-ui-runtime` processes. WGPU resources and the window remain owned by
+`neon-wgpu-runtime`; the language clients never create GPU objects.
+
+On Windows, `RuntimeSession` uses the local SDK bundle when available. Otherwise
+it downloads the pinned runtime asset from the Neon3 `v0.2.1` GitHub release and
+caches it under `%LOCALAPPDATA%\Neon3Sdk\runtime\v0.2.1`. Runtime binaries are
+kept out of the PyPI/npm packages.
+
+Python:
+
+```python
+from neon3_sdk import RuntimeConfig, RuntimeMode, RuntimeSession
+
+with RuntimeSession(RuntimeConfig(mode=RuntimeMode.WINDOWED)):
+    # Use NeonClient, UiClient, RenderClient, or EventClient here.
+    pass
 ```
 
-Set `NEON_ROOT` only when intentionally using another runtime checkout. Use
-`scripts\start-calculator-once.cmd` for the deterministic JSON result and set
-`NEON_PROFILE=debug` when using debug binaries.
+Node.js:
 
-### Python
+```ts
+import { RuntimeSession } from "@neon3/sdk";
 
-```bash
-cd packages/python-sdk
-pip install -e .
-python -m neon3_sdk calculator
+const runtime = new RuntimeSession({ mode: "windowed" });
+await runtime.start();
+try {
+  // Use NeonClient, UiClient, RenderClient, or EventClient here.
+} finally {
+  await runtime.stop();
+}
 ```
 
-Run the deterministic `1 + 2 = 3` scenario:
-
-```bash
-python -m neon3_sdk calculator --once
-```
-
-### TypeScript / Node.js
-
-```bash
-cd packages/node-sdk
-npm install
-npm run test
-npm run calculator
-```
-
-Run the headless API-contract probe:
-
-```bash
-npm run probe
-```
-
-`npm run probe` starts real Neon3 services and therefore needs the runtime
-binaries first. Build the SDK-local bundle with
-`scripts\build-neon3-release.ps1`, or deliberately test another checkout:
+For a source checkout or CI build, set `NEON_ROOT`. `NEON_PROFILE` accepts
+`auto`, `release`, or `debug`; `auto` prefers release binaries.
 
 ```powershell
-$env:NEON_ROOT = "D:\path\to\Neon3-CiJian"
+$env:NEON_ROOT = "D:\Neon3"
 $env:NEON_PROFILE = "debug"
-cd packages\node-sdk
-npm run probe
 ```
 
-For the Python SDK, run its unit tests with:
+When GitHub access requires a local HTTP proxy, set `HTTPS_PROXY` and
+`HTTP_PROXY`, for example `http://127.0.0.1:7892`. The SDK uses the proxy only
+for runtime bundle downloads; Neon3 loopback RPC remains local.
 
-```bash
-cd packages/python-sdk
+## Event Stream
+
+Both SDKs expose the existing `neon3.event` stream. File-drop tools can listen
+for `ui.file_drop.accepted` and start image analysis without polling or a second
+transport.
+
+Python:
+
+```python
+from neon3_sdk import EventClient
+
+with EventClient.connect("127.0.0.1:39101").subscribe(
+    name="ui.file_drop.accepted"
+) as events:
+    for image in events.file_drops():
+        print(image.source_path)
+```
+
+Node.js:
+
+```ts
+import { EventClient } from "@neon3/sdk";
+
+const events = await new EventClient("127.0.0.1:39101").subscribe({
+  name: "ui.file_drop.accepted",
+});
+const imageDrop = await events.nextFileDrop();
+events.close();
+```
+
+## Development
+
+```powershell
+cd packages\python-sdk
 python -m unittest discover -s tests -v
+
+cd ..\node-sdk
+npm test
 ```
 
-## Packages
-
-| Package | Source | npm / PyPI | Protocol |
-|---------|--------|------------|----------|
-| `neon3-sdk` (Python) | `packages/python-sdk/` | PyPI | `neon3.rpc` |
-| `@neon3/sdk` (Node) | `packages/node-sdk/` | npm | `neon3.rpc` |
-
-Both expose the same logical API surface: `UiClient`, `RenderClient`, `InputClient`,
-and `ExternalSurface` negotiation. See each package's README for full API docs.
-
-## Boundaries
-
-- **UiClient** — submit `.nui` flows, publish typed input frames, receive semantic
-  host-inbound events, inspect UI snapshots and traces.
-- **RenderClient** — diagnostics, graph snapshot, world configuration, 3D camera
-  frames, pointer events, external-surface lifecycle.
-- **InputClient** — typed pointer input and keyboard capability detection.
-- **ExternalSurface** — Windows/DX12 shared texture descriptor, brokered handle
-  acquisition, generation, frame sequence, and fence values. Language clients
-  never interpret native handles or own GPU resources.
-
-## Relationship to the Neon3 runtime
-
-The Neon3 runtime (Rust + WGPU) is maintained in a separate repository. It
-provides the `neon-wgpu-runtime`, `neon-ui-runtime`, and `neon-eventd` services
-that these SDKs connect to over loopback TCP. When `--neon-root` is omitted, the
-examples use the SDK-local `release` directory. Set `NEON_ROOT` or pass
-`--neon-root <path>` only when overriding that default.
-
-## License
-
-Licensed under either of [MIT](LICENSE-MIT) or [Apache 2.0](LICENSE-APACHE) at
-your option. Individual package subdirectories each carry their own license
-metadata.
-
-[Neon3]: https://github.com/unco999/Neon3-CiJian
+The runtime release is intentionally separate from the language packages. This
+keeps installation small while preserving the Neon3 multi-process boundary.

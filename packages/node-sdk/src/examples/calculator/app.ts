@@ -1,13 +1,12 @@
 import { NeonClient, RenderClient, RuntimeSession, UiClient } from "../../index.js";
-import { resolve } from "node:path";
 import { calculatorFlow } from "./flow.js";
 import { CalculatorService } from "./rpc-service.js";
 
 const once = process.argv.includes("--once");
-const root = process.env.NEON_ROOT ?? resolve(process.cwd(), "../../release");
+const root = process.env.NEON_ROOT;
 const profile = (process.env.NEON_PROFILE as "auto" | "debug" | "release" | undefined) ?? "auto";
 const service = new CalculatorService();
-const runtime = new RuntimeSession({ neonRoot: root, profile, mode: "windowed", domain: "127.0.0.1:39104" });
+const runtime = new RuntimeSession({ ...(root ? { neonRoot: root } : {}), profile, mode: "windowed", domain: "127.0.0.1:39104" });
 await service.start();
 try {
   await runtime.start();

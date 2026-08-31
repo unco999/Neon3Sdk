@@ -1,106 +1,81 @@
 # @neon3/sdk
 
-The Node SDK speaks the canonical `neon3.rpc` control plane and `neon3.event`
-stream. File-drop tooling can subscribe to the event published by the WGPU
-window owner without implementing a second transport:
+Node.js and TypeScript client SDK for Neon3 `neon3.rpc` and `neon3.event`.
+
+## Install
+
+```powershell
+npm install @neon3/sdk
+```
+
+Package page: https://www.npmjs.com/package/@neon3/sdk
+
+## Start Neon3
+
+`RuntimeSession` starts `neon-eventd`, `neon-wgpu-runtime`, and
+`neon-ui-runtime` as separate processes. On Windows, it uses a local bundle or
+downloads the pinned `v0.2.1` runtime from the Neon3 GitHub Releases page:
+
+https://github.com/unco999/Neon3-CiJian/releases
+
+```ts
+import { RuntimeSession } from "@neon3/sdk";
+
+const runtime = new RuntimeSession({ mode: "windowed" });
+await runtime.start();
+try {
+  console.log("Neon3 services are running");
+} finally {
+  await runtime.stop();
+}
+```
+
+The default cache is `%LOCALAPPDATA%\\Neon3Sdk\\runtime\\v0.2.1`. Set
+`NEON_ROOT` or pass `neonRoot` to use a local checkout. `NEON_PROFILE` accepts
+`auto`, `release`, or `debug`; `auto` prefers release binaries. The SDK never
+creates a window or owns a GPU resource.
+
+If GitHub is only reachable through a local HTTP proxy, set it before starting
+the session. The SDK honors `HTTPS_PROXY`, `HTTP_PROXY`, and their lowercase
+variants; loopback service traffic is not sent through the proxy.
+
+```powershell
+$env:HTTPS_PROXY = "http://127.0.0.1:7892"
+$env:HTTP_PROXY = "http://127.0.0.1:7892"
+```
+
+## RPC Usage
+
+```ts
+import { NeonClient, UiClient } from "@neon3/sdk";
+
+const ui = new UiClient(new NeonClient("127.0.0.1:39102", {
+  origin: "my-node-tool",
+}));
+const program = await ui.submitFlow(
+  "version 1\nsurface example revision 1\nsurface root\n",
+);
+console.log(program.surfaceId);
+```
+
+## Event Usage
 
 ```ts
 import { EventClient } from "@neon3/sdk";
 
-const subscription = await new EventClient("127.0.0.1:39101").subscribe({
+const events = await new EventClient("127.0.0.1:39101").subscribe({
   name: "ui.file_drop.accepted",
 });
-const event = await subscription.nextFileDrop();
-subscription.close();
+const imageDrop = await events.nextFileDrop();
+console.log(imageDrop.payload);
+events.close();
 ```
 
-TypeScript/Node.js client for Neon3's canonical `neon3.rpc` protocol.
+`ui.file_drop.accepted` is the existing Neon3 event bridge for OS file drops.
+Image tools can use it to start OpenCV analysis without polling.
 
-```ts
-import { NeonClient, RenderClient, UiClient } from "@neon3/sdk";
-
-const rpc = new NeonClient("127.0.0.1:39102", { origin: "my-node-tool" });
-const ui = new UiClient(rpc);
-const program = await ui.submitFlowFile("./calculator.nui");
-
-const renderer = new RenderClient(
-  new NeonClient("127.0.0.1:39103", { origin: "my-node-tool" }),
-);
-await renderer.configureWorld({ worldSpaceId: "main-world", revision: 1 });
-await renderer.submitCamera({
-  cameraId: "editor-camera",
-  worldSpaceId: "main-world",
-  position: [0, 2, 5],
-  orientationXyzw: [0, 0, 0, 1],
-  verticalFovRadians: 1,
-  near: 0.1,
-  far: 1000,
-  producerEpoch: 1,
-  sequence: 1,
-});
-```
-
-`RuntimeSession` starts windowed, headless, or external-surface Neon3 services.
-Its `profile` can be `release`, `debug`, or `auto` (the default); `auto` selects
-release binaries when all required services are present and otherwise falls back
-to debug. The runtime must remain a bundle of cooperating processes because the
-WGPU service owns the window and GPU device.
-Native GPU handles are returned only as brokered descriptors and are never
-interpreted by the JavaScript layer.
-
-Run the real headless API probe with `npm run probe`. It starts the three Neon3
-services itself, so first build the SDK-local runtime bundle with
-`scripts\build-neon3-release.ps1`, or point it at a prepared checkout:
+## Tests
 
 ```powershell
-$env:NEON_ROOT = "D:\path\to\Neon3-CiJian"
-$env:NEON_PROFILE = "debug"
-npm run probe
+npm test
 ```
-
-Set `NEON_EXTERNAL=1` to run the Windows/DX12 external-surface probe instead.
-`npm run probe:runtime` is the narrower lifecycle probe: it starts the same
-services and checks each health endpoint, without the API snapshot calls.
-
-The default probe runtime is the SDK-local `../../release` directory. Set
-`NEON_ROOT` only when intentionally selecting another runtime directory.
-
-The keyboard method is capability-gated. Until Neon3 advertises
-`wgpu.ui.keyboard.v1`, `InputClient.keyboard()` returns the stable
-`keyboard_capability_unavailable` error. Pointer input and external surface
-protocols are available.
-
-## Modular calculator example
-
-```text
-src/examples/calculator/
-  domain.ts       calculator state machine and revisioned publication
-  rpc-service.ts  Node domain RPC service
-  flow.ts         loads calculator.nui
-  calculator.nui  declarative UI only
-  app.ts          process lifecycle and protocol wiring
-```
-
-Run the visible example. The SDK-local launcher builds `release/` from the
-official GitHub Neon3 repository on first run:
-
-```powershell
-npm run calculator
-```
-
-Run the deterministic `1 + 1 = + 1 = 3` scenario:
-
-```powershell
-npm run calculator:once
-```
-
-Verify the real multi-process runtime and emit JSONL diagnostics:
-
-```powershell
-npm run probe:runtime
-```
-
-The application keeps the calculator domain in `domain.ts`; the RPC listener
-is in `rpc-service.ts`; `flow.ts` loads the declarative NUI; and `app.ts` only
-connects the runtime, UI client, renderer, and domain service. This keeps
-application logic out of the reusable SDK package.

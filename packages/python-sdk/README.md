@@ -1,38 +1,63 @@
 # neon3-sdk
 
-Python SDK for the Neon3 `neon3.rpc` control plane.
+Python client SDK for Neon3 `neon3.rpc` and `neon3.event`.
 
-```bash
-cd packages/python-sdk
-pip install -e .
-python -m neon3_sdk calculator
+## Install
+
+```powershell
+python -m pip install --upgrade neon3-sdk
 ```
 
-Tests and deterministic scenario:
+Package page: https://pypi.org/project/neon3-sdk/
 
-```bash
-python -m unittest discover -s tests -v
-python -m neon3_sdk calculator --once
+## Start Neon3
+
+`RuntimeSession` starts the Neon3 services as separate processes. On Windows it
+uses the local bundle if present, otherwise downloads and caches the pinned
+`v0.2.1` runtime from:
+
+https://github.com/unco999/Neon3-CiJian/releases
+
+```python
+from neon3_sdk import RuntimeConfig, RuntimeMode, RuntimeSession
+
+with RuntimeSession(RuntimeConfig(mode=RuntimeMode.WINDOWED)):
+    print("Neon3 services are running")
 ```
 
-### Event subscriptions
+The default cache is `%LOCALAPPDATA%\Neon3Sdk\runtime\v0.2.1`. Set `NEON_ROOT`
+or pass `RuntimeConfig(neon_root="D:/Neon3", profile="debug")` to use a local
+checkout. The SDK starts `neon-eventd`, `neon-wgpu-runtime`, and
+`neon-ui-runtime`; it does not create windows or GPU resources itself.
 
-The SDK also exposes the canonical `neon3.event` stream. A WGPU window owner
-publishes `ui.file_drop.accepted` for OS file drops; same-machine tools can
-subscribe without implementing a second transport:
+## RPC Usage
+
+```python
+from neon3_sdk import NeonClient, UiClient
+
+rpc = NeonClient.connect("127.0.0.1:39102", origin="my-tool")
+ui = UiClient(rpc)
+program = ui.submit_flow('version 1\nsurface example revision 1\nsurface root\n')
+print(program.surface_id)
+```
+
+## Event Usage
 
 ```python
 from neon3_sdk import EventClient
 
-events = EventClient.connect("127.0.0.1:39101").subscribe(
+with EventClient.connect("127.0.0.1:39101").subscribe(
     name="ui.file_drop.accepted"
-)
-with events:
+) as events:
     for image in events.file_drops():
-        print(image.source_path)
+        print(image.file_name, image.source_path)
 ```
 
-When `--neon-root` is omitted, the command uses the SDK-local `release`
-directory. Set `NEON_ROOT` or pass `--neon-root <path>` only to override it.
-Runtime clients can select a checkout profile with `RuntimeConfig(profile="debug")`
-or `RuntimeConfig(profile="release")`; `auto` preserves the release-first default.
+`ui.file_drop.accepted` is the existing Neon3 event bridge for OS file drops.
+Image tools can use it to start OpenCV analysis without polling.
+
+## Tests
+
+```powershell
+python -m unittest discover -s tests -v
+```

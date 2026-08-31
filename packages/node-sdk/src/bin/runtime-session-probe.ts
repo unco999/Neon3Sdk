@@ -1,9 +1,8 @@
 import { NeonClient, RuntimeSession } from "../index.js";
-import { resolve } from "node:path";
 
-const root = process.env.NEON_ROOT ?? resolve(process.cwd(), "../../release");
+const root = process.env.NEON_ROOT;
 const profile = (process.env.NEON_PROFILE as "auto" | "debug" | "release" | undefined) ?? "auto";
-const runtime = new RuntimeSession({ neonRoot: root, profile, mode: "headless", timeoutMs: 15000 });
+const runtime = new RuntimeSession({ ...(root ? { neonRoot: root } : {}), profile, mode: "headless", timeoutMs: 15000 });
 const callbacks: Array<Record<string, unknown>> = [];
 const emit = (event: Record<string, unknown>) => { callbacks.push(event); console.log(JSON.stringify(event)); };
 
