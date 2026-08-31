@@ -6,7 +6,7 @@ import struct
 import threading
 import unittest
 
-from neon3_sdk import NeonClient, ProtocolError
+from neon3_sdk import EventClient, NeonClient, ProtocolError
 from neon3_sdk.calculator import CalculatorDomain
 from neon3_sdk.render import Backend, BackendNegotiation, Camera3D, PointerEvent, SurfaceKind, SurfaceOpen, SurfaceSize, WorldInformation
 from neon3_sdk.runtime import RuntimeConfig, RuntimeMode, default_neon_root
@@ -28,6 +28,7 @@ class ClientWireTests(unittest.TestCase):
         self.assertEqual(RuntimeConfig(mode=RuntimeMode.WINDOWED).wgpu_arguments[0], "--window-server")
         self.assertEqual(RuntimeConfig(mode=RuntimeMode.HEADLESS).wgpu_arguments[0], "--headless-server")
         self.assertEqual(RuntimeConfig(mode=RuntimeMode.EXTERNAL_SURFACE).wgpu_arguments[0], "--window-server")
+        self.assertEqual(RuntimeConfig(profile="debug").profile, "debug")
 
     def test_calculator_defaults_to_sdk_release_directory(self) -> None:
         args = parse_args(["calculator"])
@@ -127,6 +128,40 @@ class ClientWireTests(unittest.TestCase):
         with self.assertRaises(ProtocolError):
             NeonClient.connect(endpoint).call("ui-runtime", "service.health")
         thread.join(timeout=2)
+
+    def test_event_subscription_uses_canonical_event_framing(self) -> None:
+        listener = socket.socket()
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        endpoint = listener.getsockname()
+        observed: dict[str, object] = {}
+
+        def server() -> None:
+            stream, _ = listener.accept()
+            with stream:
+                size = struct.unpack(">I", receive(stream, 4))[0]
+                request = json.loads(receive(stream, size))
+                observed.update(request)
+                ack = {"kind": "ack", "protocol": "neon3.event", "version": {"major": 1, "minor": 0}, "request_id": request["request_id"], "status": "accepted", "event_id": None, "epoch": 4, "sequence": None, "current_sequence": 0, "error": None}
+                encoded = json.dumps(ack, separators=(",", ":")).encode()
+                stream.sendall(struct.pack(">I", len(encoded)) + encoded)
+                event = {"kind": "delivery", "protocol": "neon3.event", "version": {"major": 1, "minor": 0}, "event": {"protocol": "neon3.event", "version": {"major": 1, "minor": 0}, "event_id": "evt-4-1", "name": "ui.file_drop.accepted", "schema_version": 1, "epoch": 4, "sequence": 1, "timestamp_unix_ms": 10, "publisher": {"kind": "wgpu_runtime", "instance_id": "window-1", "pid": 1, "origin": "neon-wgpu-runtime"}, "payload": {"drop_sequence": 1, "source_path": "D:/ui.png", "file_name": "ui.png", "extension": "png", "media_type": "image/png", "is_image": True, "renderer_epoch": 1, "frame_sequence": 2}}}
+                encoded = json.dumps(event, separators=(",", ":")).encode()
+                stream.sendall(struct.pack(">I", len(encoded)) + encoded)
+            listener.close()
+
+        thread = threading.Thread(target=server)
+        thread.start()
+        subscription = EventClient.connect(endpoint, origin="test", instance_id="event-test").subscribe(name="ui.file_drop.accepted")
+        event = subscription.recv()
+        subscription.close()
+        thread.join(timeout=2)
+
+        self.assertEqual(event.name, "ui.file_drop.accepted")
+        self.assertEqual(event.sequence, 1)
+        self.assertEqual(observed["protocol"], "neon3.event")
+        self.assertEqual(observed["kind"], "subscribe")
+        self.assertEqual(observed["filters"][0]["name"], "ui.file_drop.accepted")
 
 
 def receive(stream: socket.socket, length: int) -> bytes:

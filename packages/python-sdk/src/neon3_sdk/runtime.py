@@ -42,13 +42,14 @@ class RuntimeConfig:
     endpoints: RuntimeEndpoints = RuntimeEndpoints()
     domain_endpoint: str = "127.0.0.1:39104"
     timeout_seconds: float = 15.0
+    profile: str = "auto"
 
     @property
     def wgpu_arguments(self) -> tuple[str, ...]:
         if self.mode is RuntimeMode.WINDOWED:
-            return ("--window-server", self.endpoints.wgpu, self.endpoints.ui)
+            return ("--window-server", self.endpoints.wgpu, self.endpoints.ui, "--eventd", self.endpoints.eventd)
         if self.mode is RuntimeMode.EXTERNAL_SURFACE:
-            return ("--window-server", self.endpoints.wgpu, self.endpoints.ui)
+            return ("--window-server", self.endpoints.wgpu, self.endpoints.ui, "--eventd", self.endpoints.eventd)
         return ("--headless-server", self.endpoints.wgpu)
 
 
@@ -61,10 +62,14 @@ class RuntimeSession:
 
     def start(self) -> None:
         root = Path(self.config.neon_root)
+        requested_profile = self.config.profile.lower()
+        if requested_profile not in {"auto", "release", "debug"}:
+            raise ValueError("profile must be auto, release, or debug")
+        profiles = (requested_profile,) if requested_profile != "auto" else ("release", "debug")
         runtime_dir = next(
             (
                 root / "target" / profile
-                for profile in ("release", "debug")
+                for profile in profiles
                 if all((root / "target" / profile / name).is_file() for name in ("neon-eventd.exe", "neon-wgpu-runtime.exe", "neon-ui-runtime.exe"))
             ),
             None,

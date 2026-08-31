@@ -28,7 +28,7 @@ export class RuntimeSession {
       await this.waitReady();
     } catch (error) { await this.stop(); throw error; }
   }
-  private wgpuArgs(): string[] { return this.config.mode === "headless" ? ["--headless-server", this.config.wgpu] : ["--window-server", this.config.wgpu, this.config.ui]; }
+  private wgpuArgs(): string[] { return this.config.mode === "headless" ? ["--headless-server", this.config.wgpu] : ["--window-server", this.config.wgpu, this.config.ui, "--eventd", this.config.eventd]; }
   private async findExecutableDir(): Promise<string> {
     const requested = this.config.profile;
     const profiles: Array<Exclude<RuntimeProfile, "auto">> = requested === "auto" ? ["release", "debug"] : [requested];

@@ -1,4 +1,5 @@
 export * from "./client.js";
+export * from "./event.js";
 export * from "./errors.js";
 export * from "./input.js";
 export * from "./protocol.js";

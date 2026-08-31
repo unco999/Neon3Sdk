@@ -1,5 +1,6 @@
 export const RPC_PROTOCOL = "neon3.rpc" as const;
 export const PROTOCOL_VERSION = { major: 1, minor: 0 } as const;
+export const EVENT_PROTOCOL = "neon3.event" as const;
 
 export interface RpcResponse<T = unknown> {
   request_id: string;
@@ -22,4 +23,24 @@ export interface ServiceHealth {
   service: string;
   status: "healthy" | "degraded" | "unhealthy";
   epoch: number;
+}
+
+export interface ClientIdentity {
+  kind: string;
+  instance_id: string;
+  pid: number;
+  origin: string;
+}
+
+export interface EventEnvelope {
+  protocol: string;
+  version: { major: number; minor: number };
+  event_id: string;
+  name: string;
+  schema_version: number;
+  epoch: number;
+  sequence: number;
+  timestamp_unix_ms: number;
+  publisher: ClientIdentity;
+  payload: unknown;
 }

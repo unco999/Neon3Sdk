@@ -1,5 +1,19 @@
 # @neon3/sdk
 
+The Node SDK speaks the canonical `neon3.rpc` control plane and `neon3.event`
+stream. File-drop tooling can subscribe to the event published by the WGPU
+window owner without implementing a second transport:
+
+```ts
+import { EventClient } from "@neon3/sdk";
+
+const subscription = await new EventClient("127.0.0.1:39101").subscribe({
+  name: "ui.file_drop.accepted",
+});
+const event = await subscription.nextFileDrop();
+subscription.close();
+```
+
 TypeScript/Node.js client for Neon3's canonical `neon3.rpc` protocol.
 
 ```ts

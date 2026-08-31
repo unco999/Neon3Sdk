@@ -37,6 +37,10 @@ class ClientIdentity:
             "origin": self.origin,
         }
 
+    @classmethod
+    def from_wire(cls, value: dict[str, Any]) -> "ClientIdentity":
+        return cls(**value)
+
 
 @dataclass(frozen=True)
 class RpcResponse:
@@ -85,3 +89,48 @@ class ServiceDescription:
             epoch=value["epoch"],
             capabilities=tuple(value["capabilities"]),
         )
+
+
+@dataclass(frozen=True)
+class EventEnvelope:
+    protocol: str
+    version: dict[str, int]
+    event_id: str
+    name: str
+    schema_version: int
+    epoch: int
+    sequence: int
+    timestamp_unix_ms: int
+    publisher: ClientIdentity
+    payload: Any
+
+    @classmethod
+    def from_wire(cls, value: dict[str, Any]) -> "EventEnvelope":
+        return cls(
+            protocol=value["protocol"],
+            version=value["version"],
+            event_id=value["event_id"],
+            name=value["name"],
+            schema_version=value["schema_version"],
+            epoch=value["epoch"],
+            sequence=value["sequence"],
+            timestamp_unix_ms=value["timestamp_unix_ms"],
+            publisher=ClientIdentity.from_wire(value["publisher"]),
+            payload=value["payload"],
+        )
+
+
+@dataclass(frozen=True)
+class UiFileDropPayload:
+    drop_sequence: int
+    source_path: str
+    file_name: str
+    extension: str
+    media_type: str
+    is_image: bool
+    renderer_epoch: int
+    frame_sequence: int
+
+    @classmethod
+    def from_wire(cls, value: dict[str, Any]) -> "UiFileDropPayload":
+        return cls(**value)
