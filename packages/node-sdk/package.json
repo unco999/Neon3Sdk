@@ -1,6 +1,6 @@
 {
   "name": "@neon3/sdk",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Node.js and TypeScript SDK for the Neon3 control-plane protocol",
   "type": "module",
   "main": "./dist/index.js",

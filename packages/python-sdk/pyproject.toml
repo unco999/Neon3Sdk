@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "neon3-sdk"
-version = "0.1.2"
+version = "0.1.3"
 description = "Public Python client SDK for the Neon3 control-plane protocol."
 readme = "README.md"
 requires-python = ">=3.10"
