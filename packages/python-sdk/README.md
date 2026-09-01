@@ -25,7 +25,10 @@ with RuntimeSession(RuntimeConfig(mode=RuntimeMode.WINDOWED)):
 ```
 
 The resolved release is cached under `%LOCALAPPDATA%\Neon3Sdk\runtime\<tag>`.
-Set `NEON3_RUNTIME_VERSION=v0.2.1` when reproducible pinning is required.
+Set `NEON3_RUNTIME_VERSION=<tag>` (for example `v0.2.3`) when reproducible
+pinning is required; only pin a runtime that is at least as new as the UI
+schema your flows use, otherwise newer nodes such as `tooltip` or `canvas`
+fail with `nui_flow_unknown_attribute`.
 Set `NEON_ROOT` or pass `RuntimeConfig(neon_root="D:/Neon3", profile="debug")`
 to use a local checkout. The SDK starts `neon-eventd`, `neon-wgpu-runtime`, and
 `neon-ui-runtime`; it does not create windows or GPU resources itself.

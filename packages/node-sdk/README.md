@@ -31,7 +31,10 @@ try {
 ```
 
 The resolved release is cached under `%LOCALAPPDATA%\\Neon3Sdk\\runtime\\<tag>`.
-Set `NEON3_RUNTIME_VERSION=v0.2.1` when reproducible pinning is required. Set
+Set `NEON3_RUNTIME_VERSION=<tag>` (for example `v0.2.3`) when reproducible
+pinning is required; only pin a runtime at least as new as the UI schema your
+flows use, or newer nodes such as `tooltip` or `canvas` fail with
+`nui_flow_unknown_attribute`. Set
 `NEON_ROOT` or pass `neonRoot` to use a local checkout. `NEON_PROFILE` accepts
 `auto`, `release`, or `debug`; `auto` prefers release binaries. The SDK never
 creates a window or owns a GPU resource.

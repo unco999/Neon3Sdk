@@ -23,7 +23,10 @@ The SDK starts the separate `neon-eventd`, `neon-wgpu-runtime`, and
 On Windows, `RuntimeSession` uses the local SDK bundle when available. Otherwise
 it resolves and downloads the latest runtime asset from the Neon3 GitHub
 Releases page and caches it under `%LOCALAPPDATA%\Neon3Sdk\runtime\<tag>`.
-Set `NEON3_RUNTIME_VERSION=v0.2.1` when reproducible pinning is required. Runtime binaries are
+Set `NEON3_RUNTIME_VERSION=<tag>` (for example `v0.2.3`) when reproducible
+pinning is required; pin only a runtime at least as new as the UI schema your
+flows use, or newer nodes such as `tooltip` or `canvas` fail with
+`nui_flow_unknown_attribute`. Runtime binaries are
 kept out of the PyPI/npm packages.
 
 Python:
