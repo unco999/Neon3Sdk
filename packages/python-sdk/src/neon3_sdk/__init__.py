@@ -7,7 +7,7 @@ from .models import AssetRef, ClientIdentity, EventEnvelope, RpcResponse, Servic
 from .nui import ComponentGallery, GallerySubmission
 from .input import InputClient, KeyEvent
 from .render import Backend, BackendNegotiation, Camera3D, ColorSpace, ExternalSurface, RenderClient, SurfaceKind, SurfaceOpen, SurfaceSize, SurfaceTarget, WorldInformation, WorldPlacement
-from .runtime import RuntimeConfig, RuntimeEndpoints, RuntimeMode, RuntimeSession, default_neon_root
+from .runtime import RuntimeConfig, RuntimeEndpoints, RuntimeMode, RuntimeSession, default_neon_root, runtime_version
 from .ui import UiClient, UiProgram
 from .event import EventClient, EventFilter, EventSubscription
 
@@ -43,6 +43,7 @@ __all__ = [
     "RuntimeMode",
     "RuntimeSession",
     "default_neon_root",
+    "runtime_version",
     "UiClient",
     "UiProgram",
     "EventClient",

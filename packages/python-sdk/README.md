@@ -13,8 +13,7 @@ Package page: https://pypi.org/project/neon3-sdk/
 ## Start Neon3
 
 `RuntimeSession` starts the Neon3 services as separate processes. On Windows it
-uses the local bundle if present, otherwise downloads and caches the pinned
-`v0.2.1` runtime from:
+resolves and downloads the latest runtime release from:
 
 https://github.com/unco999/Neon3-CiJian/releases
 
@@ -25,9 +24,10 @@ with RuntimeSession(RuntimeConfig(mode=RuntimeMode.WINDOWED)):
     print("Neon3 services are running")
 ```
 
-The default cache is `%LOCALAPPDATA%\Neon3Sdk\runtime\v0.2.1`. Set `NEON_ROOT`
-or pass `RuntimeConfig(neon_root="D:/Neon3", profile="debug")` to use a local
-checkout. The SDK starts `neon-eventd`, `neon-wgpu-runtime`, and
+The resolved release is cached under `%LOCALAPPDATA%\Neon3Sdk\runtime\<tag>`.
+Set `NEON3_RUNTIME_VERSION=v0.2.1` when reproducible pinning is required.
+Set `NEON_ROOT` or pass `RuntimeConfig(neon_root="D:/Neon3", profile="debug")`
+to use a local checkout. The SDK starts `neon-eventd`, `neon-wgpu-runtime`, and
 `neon-ui-runtime`; it does not create windows or GPU resources itself.
 
 ## RPC Usage

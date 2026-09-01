@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import enum
+import json
 import os
 import subprocess
 import time
@@ -14,22 +15,38 @@ from typing import Any
 
 from .client import NeonClient
 
-NEON3_RUNTIME_VERSION = "v0.2.1"
+NEON3_RUNTIME_VERSION = "latest"
 NEON3_RUNTIME_REPOSITORY = "unco999/Neon3-CiJian"
-NEON3_RUNTIME_ASSET = f"neon3-runtime-windows-x86_64-{NEON3_RUNTIME_VERSION}.zip"
+NEON3_RUNTIME_ASSET_TEMPLATE = "neon3-runtime-windows-x86_64-{version}.zip"
 
 
-def default_neon_root() -> Path:
+def runtime_version() -> str:
+    """Return the selected runtime release, defaulting to GitHub latest."""
+    return os.environ.get("NEON3_RUNTIME_VERSION", NEON3_RUNTIME_VERSION)
+
+
+def _resolve_runtime_version(version: str) -> str:
+    if version != "latest":
+        return version
+    request = urllib.request.Request(
+        f"https://api.github.com/repos/{NEON3_RUNTIME_REPOSITORY}/releases/latest",
+        headers={"Accept": "application/vnd.github+json", "User-Agent": "neon3-sdk"},
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        release = json.loads(response.read().decode("utf-8"))
+    tag = release.get("tag_name")
+    if not isinstance(tag, str) or not tag.strip():
+        raise RuntimeError("GitHub latest Neon3 release did not contain tag_name")
+    return tag
+
+
+def default_neon_root(version: str | None = None) -> Path:
     """Return an explicit root, local SDK bundle, or per-user runtime cache."""
     override = os.environ.get("NEON_ROOT")
     if override:
         return Path(override)
-    sdk_root = Path(__file__).resolve().parents[4]
-    local_release = sdk_root / "release"
-    if _runtime_available(local_release):
-        return local_release
     local_app_data = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
-    return local_app_data / "Neon3Sdk" / "runtime" / NEON3_RUNTIME_VERSION
+    return local_app_data / "Neon3Sdk" / "runtime" / (version or runtime_version())
 
 
 def _runtime_available(root: Path) -> bool:
@@ -38,10 +55,11 @@ def _runtime_available(root: Path) -> bool:
     ))
 
 
-def _download_runtime(root: Path) -> None:
+def _download_runtime(root: Path, version: str) -> None:
     root.mkdir(parents=True, exist_ok=True)
-    archive = root.parent / f"{NEON3_RUNTIME_ASSET}.download"
-    url = f"https://github.com/{NEON3_RUNTIME_REPOSITORY}/releases/download/{NEON3_RUNTIME_VERSION}/{NEON3_RUNTIME_ASSET}"
+    asset = NEON3_RUNTIME_ASSET_TEMPLATE.format(version=version)
+    archive = root.parent / f"{asset}.download"
+    url = f"https://github.com/{NEON3_RUNTIME_REPOSITORY}/releases/download/{version}/{asset}"
     try:
         with urllib.request.urlopen(url, timeout=180) as response, archive.open("wb") as stream:
             stream.write(response.read())
@@ -72,6 +90,7 @@ class RuntimeConfig:
     domain_endpoint: str = "127.0.0.1:39104"
     timeout_seconds: float = 15.0
     profile: str = field(default_factory=lambda: os.environ.get("NEON_PROFILE", "auto"))
+    runtime_version: str = field(default_factory=runtime_version)
 
     @property
     def wgpu_arguments(self) -> tuple[str, ...]:
@@ -90,7 +109,12 @@ class RuntimeSession:
         self.processes: list[tuple[str, subprocess.Popen[str]]] = []
 
     def start(self) -> None:
+        selected_runtime_version = self.config.runtime_version
+        if selected_runtime_version == "latest":
+            selected_runtime_version = _resolve_runtime_version(selected_runtime_version)
         root = Path(self.config.neon_root)
+        if not os.environ.get("NEON_ROOT") and self.config.neon_root == str(default_neon_root("latest")):
+            root = default_neon_root(selected_runtime_version)
         requested_profile = self.config.profile.lower()
         if requested_profile not in {"auto", "release", "debug"}:
             raise ValueError("profile must be auto, release, or debug")
@@ -107,10 +131,10 @@ class RuntimeSession:
             runtime_dir is None
             and self.config.profile.lower() in {"auto", "release"}
             and not os.environ.get("NEON_ROOT")
-            and Path(self.config.neon_root) == default_neon_root()
+            and root == default_neon_root(selected_runtime_version)
         )
         if can_download:
-            _download_runtime(root)
+            _download_runtime(root, selected_runtime_version)
             runtime_dir = root / "target" / "release"
         if runtime_dir is None:
             raise FileNotFoundError(f"Neon3 release/debug binaries not found under {root}")

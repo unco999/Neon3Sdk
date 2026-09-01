@@ -21,8 +21,9 @@ The SDK starts the separate `neon-eventd`, `neon-wgpu-runtime`, and
 `neon-wgpu-runtime`; the language clients never create GPU objects.
 
 On Windows, `RuntimeSession` uses the local SDK bundle when available. Otherwise
-it downloads the pinned runtime asset from the Neon3 `v0.2.1` GitHub release and
-caches it under `%LOCALAPPDATA%\Neon3Sdk\runtime\v0.2.1`. Runtime binaries are
+it resolves and downloads the latest runtime asset from the Neon3 GitHub
+Releases page and caches it under `%LOCALAPPDATA%\Neon3Sdk\runtime\<tag>`.
+Set `NEON3_RUNTIME_VERSION=v0.2.1` when reproducible pinning is required. Runtime binaries are
 kept out of the PyPI/npm packages.
 
 Python:
@@ -103,3 +104,26 @@ npm test
 
 The runtime release is intentionally separate from the language packages. This
 keeps installation small while preserving the Neon3 multi-process boundary.
+
+## Maintainer release pipeline
+
+Canvas renderer changes live in the Neon3 runtime; the Python and Node SDK
+sources only need a release when their public protocol/client API changes. Once
+Neon3 has a committed, pushed and tagged release commit, run the cross-repo
+validation and bundle pipeline:
+
+```powershell
+& D:\Neon3Sdk\scripts\sync-neon3-stack.ps1 -ReleaseRef v0.2.2 -BuildRuntime
+```
+
+It runs the real `canvas_window_probe` (NUI producer -> IPC -> WGPU window
+consumer), workspace/package checks, SDK tests and the Bevy plugin check. It
+emits JSONL while running and writes
+`release/neon3-stack-validation.json`. It refuses to build a distributable SDK
+runtime if Neon3 is dirty, ahead of upstream, or the supplied release tag does
+not identify the tested Neon3 `HEAD`. For a new runtime release, first update
+both SDK `NEON3_RUNTIME_VERSION` constants (Python and Node) to the release tag
+only when a reproducible pin is required; `latest` is also accepted. The
+pipeline verifies the selection before bundling. The script never commits, pushes,
+tags or publishes packages; those remain an
+explicit release approval step.

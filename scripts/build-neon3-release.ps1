@@ -3,6 +3,7 @@ param(
     [string]$Ref = "",
     [string]$SdkRoot = "",
     [string]$ReleaseRoot = "",
+    [string]$SourceRoot = "",
     [switch]$Offline
 )
 
@@ -13,11 +14,17 @@ $SdkRoot = [IO.Path]::GetFullPath($SdkRoot)
 $ReleaseRoot = [IO.Path]::GetFullPath($ReleaseRoot)
 $cacheRoot = Join-Path $SdkRoot ".cache\neon3"
 $sourceRoot = Join-Path $cacheRoot "source"
+$usingLocalSource = -not [string]::IsNullOrWhiteSpace($SourceRoot)
+if ($usingLocalSource) { $sourceRoot = [IO.Path]::GetFullPath($SourceRoot) }
 $sourceCargo = Join-Path $sourceRoot "Cargo.toml"
 
 if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) { throw "Rust/Cargo is required to build Neon3 from GitHub." }
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) { throw "Git is required to download Neon3 from GitHub." }
 New-Item -ItemType Directory -Force -Path $cacheRoot | Out-Null
+
+if ($usingLocalSource -and -not (Test-Path -LiteralPath $sourceCargo)) {
+    throw "Local Neon3 source does not contain Cargo.toml: $sourceRoot"
+}
 
 if ([string]::IsNullOrWhiteSpace($Ref)) {
     $Ref = "master"
@@ -29,13 +36,13 @@ if ([string]::IsNullOrWhiteSpace($Ref)) {
     }
 }
 
-if (-not (Test-Path -LiteralPath $sourceCargo)) {
+if (-not $usingLocalSource -and -not (Test-Path -LiteralPath $sourceCargo)) {
     if ($Offline) { throw "Offline build requested but the cached Neon3 source is missing: $sourceRoot" }
     if (Test-Path -LiteralPath $sourceRoot) { Remove-Item -LiteralPath $sourceRoot -Recurse -Force }
     Write-Host "Downloading Neon3 from $Repository ($Ref)..."
     & git clone --depth 1 --branch $Ref $Repository $sourceRoot
     if ($LASTEXITCODE -ne 0) { throw "Unable to clone Neon3 from $Repository" }
-} elseif (-not $Offline) {
+} elseif (-not $usingLocalSource -and -not $Offline) {
     Write-Host "Refreshing Neon3 source from $Repository ($Ref)..."
     & git -C $sourceRoot fetch --depth 1 origin $Ref
     if ($LASTEXITCODE -eq 0) {

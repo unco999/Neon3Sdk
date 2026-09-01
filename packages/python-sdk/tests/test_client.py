@@ -33,7 +33,7 @@ class ClientWireTests(unittest.TestCase):
     def test_calculator_defaults_to_sdk_release_directory(self) -> None:
         args = parse_args(["calculator"])
         self.assertEqual(args.neon_root, default_neon_root())
-        self.assertTrue(str(args.neon_root).endswith("release"))
+        self.assertTrue(str(args.neon_root).endswith("runtime\\latest"))
 
     def test_python_domain_calculates_and_emits_revisioned_input_changes(self) -> None:
         domain = CalculatorDomain()

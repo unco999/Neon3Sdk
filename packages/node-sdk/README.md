@@ -14,7 +14,7 @@ Package page: https://www.npmjs.com/package/@neon3/sdk
 
 `RuntimeSession` starts `neon-eventd`, `neon-wgpu-runtime`, and
 `neon-ui-runtime` as separate processes. On Windows, it uses a local bundle or
-downloads the pinned `v0.2.1` runtime from the Neon3 GitHub Releases page:
+resolves and downloads the latest runtime from the Neon3 GitHub Releases page:
 
 https://github.com/unco999/Neon3-CiJian/releases
 
@@ -30,7 +30,8 @@ try {
 }
 ```
 
-The default cache is `%LOCALAPPDATA%\\Neon3Sdk\\runtime\\v0.2.1`. Set
+The resolved release is cached under `%LOCALAPPDATA%\\Neon3Sdk\\runtime\\<tag>`.
+Set `NEON3_RUNTIME_VERSION=v0.2.1` when reproducible pinning is required. Set
 `NEON_ROOT` or pass `neonRoot` to use a local checkout. `NEON_PROFILE` accepts
 `auto`, `release`, or `debug`; `auto` prefers release binaries. The SDK never
 creates a window or owns a GPU resource.
