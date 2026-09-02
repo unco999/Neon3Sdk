@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import socket
 import struct
+import time
 from dataclasses import dataclass
 from typing import Any, Iterator
 
@@ -38,11 +39,39 @@ class EventSubscription:
         self.client = client
         self.filters = filters
 
-    def recv(self) -> EventEnvelope:
-        response = self._reader.read()
+    def recv(self, *, timeout_seconds: float | None = None) -> EventEnvelope:
+        """Read the next delivery frame, optionally bounded by a timeout.
+
+        A timeout expiry raises ``TimeoutError``; the subscription stays open
+        and can be polled again. This mirrors the Node helper's timeout
+        semantics.
+        """
+        response = self._reader.read(timeout_seconds=timeout_seconds)
         if response.get("kind") != "delivery":
             raise ProtocolError(f"expected event delivery, got {response.get('kind')}")
         return EventEnvelope.from_wire(response["event"])
+
+    def receive(self, max_events: int, *, timeout_seconds: float | None = None) -> tuple[EventEnvelope, ...]:
+        """Bounded receive: collect up to ``max_events`` deliveries.
+
+        Returns as soon as either the cap is reached or the (aggregate) timeout
+        expires, so callers never block on a quiet bus during a probe.
+        """
+        if max_events <= 0:
+            raise ValueError("max_events must be positive")
+        events: list[EventEnvelope] = []
+        start = time.monotonic()
+        while len(events) < max_events:
+            remaining = None
+            if timeout_seconds is not None:
+                remaining = timeout_seconds - (time.monotonic() - start)
+                if remaining <= 0:
+                    break
+            try:
+                events.append(self.recv(timeout_seconds=remaining))
+            except TimeoutError:
+                break
+        return tuple(events)
 
     def file_drops(self, *, images_only: bool = True) -> Iterator[UiFileDropPayload]:
         while True:
@@ -53,6 +82,16 @@ class EventSubscription:
             if images_only and not payload.is_image:
                 continue
             yield payload
+
+    def typed_events(self, name: str, *, timeout_seconds: float | None = None) -> Iterator[Any]:
+        """Yield payloads of deliveries matching ``name`` until the timeout lapses."""
+        while True:
+            try:
+                event = self.recv(timeout_seconds=timeout_seconds)
+            except TimeoutError:
+                return
+            if event.name == name:
+                yield event.payload
 
     def close(self) -> None:
         self._stream.close()
@@ -143,26 +182,36 @@ class _FrameReader:
         self.stream = stream
         self.buffer = bytearray()
 
-    def read(self) -> dict[str, Any]:
-        while True:
-            if len(self.buffer) >= 4:
-                size = struct.unpack(">I", self.buffer[:4])[0]
-                if size > MAX_FRAME_SIZE:
-                    raise ProtocolError("event frame_too_large")
-                if len(self.buffer) >= size + 4:
-                    payload = bytes(self.buffer[4:size + 4])
-                    del self.buffer[:size + 4]
-                    try:
-                        decoded = json.loads(payload.decode("utf-8"))
-                    except (UnicodeDecodeError, json.JSONDecodeError) as error:
-                        raise ProtocolError(f"invalid event JSON: {error}") from error
-                    if not isinstance(decoded, dict):
-                        raise ProtocolError("event frame must be a JSON object")
-                    return decoded
-            chunk = self.stream.recv(64 * 1024)
-            if not chunk:
-                raise TransportError("connection_closed")
-            self.buffer.extend(chunk)
+    def read(self, *, timeout_seconds: float | None = None) -> dict[str, Any]:
+        previous_timeout = self.stream.gettimeout()
+        if timeout_seconds is not None:
+            self.stream.settimeout(timeout_seconds)
+        try:
+            while True:
+                if len(self.buffer) >= 4:
+                    size = struct.unpack(">I", self.buffer[:4])[0]
+                    if size > MAX_FRAME_SIZE:
+                        raise ProtocolError("event frame_too_large")
+                    if len(self.buffer) >= size + 4:
+                        payload = bytes(self.buffer[4:size + 4])
+                        del self.buffer[:size + 4]
+                        try:
+                            decoded = json.loads(payload.decode("utf-8"))
+                        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+                            raise ProtocolError(f"invalid event JSON: {error}") from error
+                        if not isinstance(decoded, dict):
+                            raise ProtocolError("event frame must be a JSON object")
+                        return decoded
+                try:
+                    chunk = self.stream.recv(64 * 1024)
+                except (TimeoutError, socket.timeout):
+                    raise TimeoutError("event recv timeout")
+                if not chunk:
+                    raise TransportError("connection_closed")
+                self.buffer.extend(chunk)
+        finally:
+            if timeout_seconds is not None:
+                self.stream.settimeout(previous_timeout)
 
 
 def _recv_exact(stream: socket.socket, length: int) -> bytes:

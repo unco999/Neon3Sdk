@@ -3,13 +3,33 @@
 from .client import NeonClient
 from .calculator import CalculatorDomain, CalculatorServer
 from .errors import NeonError, ProtocolError, RemoteError, TransportError
-from .models import AssetRef, ClientIdentity, EventEnvelope, RpcResponse, ServiceDescription, ServiceHealth, UiFileDropPayload
+from .models import (
+    AssetRef,
+    ClientIdentity,
+    DebugSnapshot,
+    EventEnvelope,
+    InputChange,
+    InputSlot,
+    ProgramInputSnapshot,
+    ResolvedInputs,
+    ResolvedInputValue,
+    RevisionState,
+    RpcResponse,
+    SemanticInteractionMetadata,
+    ServiceDescription,
+    ServiceHealth,
+    UiFileDropPayload,
+    UiProgramRevisionInfo,
+    UiSnapshot,
+    UiTraceRecord,
+)
 from .nui import ComponentGallery, GallerySubmission
 from .input import InputClient, KeyEvent
-from .render import Backend, BackendNegotiation, Camera3D, ColorSpace, ExternalSurface, RenderClient, SurfaceKind, SurfaceOpen, SurfaceSize, SurfaceTarget, WorldInformation, WorldPlacement
+from .render import Backend, BackendNegotiation, Camera3D, ColorSpace, ExternalSurface, PointerEvent, RenderClient, SurfaceKind, SurfaceOpen, SurfaceSize, SurfaceTarget, WorldInformation, WorldPlacement
 from .runtime import RuntimeConfig, RuntimeEndpoints, RuntimeMode, RuntimeSession, default_neon_root, runtime_version
 from .ui import UiClient, UiProgram
 from .event import EventClient, EventFilter, EventSubscription
+from .wire import CORE_ERROR_CODES, canonical_json, fixture_path, load_fixture
 
 __all__ = [
     "AssetRef",
@@ -21,16 +41,25 @@ __all__ = [
     "BackendNegotiation",
     "ColorSpace",
     "ComponentGallery",
+    "CORE_ERROR_CODES",
+    "DebugSnapshot",
     "GallerySubmission",
     "ExternalSurface",
     "InputClient",
+    "InputSlot",
+    "ProgramInputSnapshot",
+    "PointerEvent",
     "KeyEvent",
     "NeonClient",
     "NeonError",
     "ProtocolError",
     "RemoteError",
     "RenderClient",
+    "ResolvedInputs",
+    "ResolvedInputValue",
+    "RevisionState",
     "RpcResponse",
+    "SemanticInteractionMetadata",
     "ServiceDescription",
     "ServiceHealth",
     "SurfaceKind",
@@ -42,14 +71,21 @@ __all__ = [
     "RuntimeEndpoints",
     "RuntimeMode",
     "RuntimeSession",
-    "default_neon_root",
-    "runtime_version",
     "UiClient",
     "UiProgram",
+    "UiProgramRevisionInfo",
+    "UiSnapshot",
+    "UiTraceRecord",
+    "canonical_json",
+    "default_neon_root",
+    "fixture_path",
+    "load_fixture",
+    "runtime_version",
     "EventClient",
     "EventFilter",
     "EventSubscription",
     "EventEnvelope",
+    "InputChange",
     "UiFileDropPayload",
     "WorldPlacement",
     "WorldInformation",
