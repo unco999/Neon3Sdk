@@ -1,5 +1,6 @@
 export * from "./capabilities.js";
 export * from "./client.js";
+export * from "./components.js";
 export * from "./errors.js";
 export * from "./event.js";
 export * from "./input.js";

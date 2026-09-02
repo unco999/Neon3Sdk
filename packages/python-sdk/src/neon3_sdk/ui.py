@@ -99,6 +99,19 @@ class UiClient:
         frame = {"program_revision": program_revision, "expected_input_revision": expected_input_revision, "request_id": request_id or str(uuid.uuid4()), "idempotency_key": idempotency_key or f"ui-input:{uuid.uuid4()}", "changes": changes}
         return self.client.call(self.target, "ui.input.frame", frame, request_id=frame["request_id"], idempotency_key=frame["idempotency_key"]).result
 
+    def collection(self, node_key: str, *, source: Any, fallback: str = "list", **kwargs: Any):
+        """Bind a keyed collection store to a template/grid node.
+
+        Gates on ``ui.data_grid.window.v1``: with it, ``page()`` paging is
+        enabled; without it, ``fallback="list"`` keeps a plain keyed list and
+        ``fallback="reject"`` raises CapabilityError. Returns a
+        :class:`neon3_sdk.components.CollectionBinding`.
+        """
+        from .components import CollectionBinder
+
+        binder = CollectionBinder(self.capabilities(), fallback=fallback)
+        return binder.bind(node_key, source, **kwargs)
+
     def snapshot(self) -> UiSnapshot:
         """Typed pair of the service debug snapshot and the host input state."""
         service = self.client.call(self.target, "debug.snapshot.get").result

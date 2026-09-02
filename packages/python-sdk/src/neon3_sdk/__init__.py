@@ -3,6 +3,7 @@
 from .client import NeonClient
 from .calculator import CalculatorDomain, CalculatorServer
 from .capabilities import CapabilitySet, describe_capabilities, required_capabilities_for_flow, scan_flow, validate_flow_source
+from .components import BindingPage, CollectionBinder, CollectionBinding, DragSpec, DropSpec
 from .errors import (
     CapabilityError,
     DropRejectedError,
@@ -53,6 +54,7 @@ from .wire import CORE_ERROR_CODES, canonical_json, fixture_path, load_fixture
 
 __all__ = [
     "AssetRef",
+    "BindingPage",
     "CapabilityError",
     "CapabilitySet",
     "ClientIdentity",
@@ -61,14 +63,18 @@ __all__ = [
     "Camera3D",
     "Backend",
     "BackendNegotiation",
+    "CollectionBinding",
+    "CollectionBinder",
     "CollectionStore",
     "ColorSpace",
     "ComponentGallery",
     "CORE_ERROR_CODES",
     "DebugSnapshot",
     "DragSource",
+    "DragSpec",
     "DropEvent",
     "DropRejectedError",
+    "DropSpec",
     "DropTarget",
     "DuplicateEventError",
     "FlowValidationError",

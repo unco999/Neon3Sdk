@@ -136,4 +136,19 @@ export class UiClient {
     const response = await this.client.call<ProgramInputSnapshot>(this.target, "debug.ui.host.snapshot", {}, { raiseForStatus: false });
     return response.status === "accepted" && response.result && typeof response.result === "object" ? response.result : null;
   }
+
+  /**
+   * Bind a keyed collection store to a template/grid node, gated on
+   * `ui.data_grid.window.v1`. Mirrors `UiClient.collection()` in Python.
+   */
+  async collection(
+    nodeKey: string,
+    source: import("./store.js").CollectionStore,
+    options: Omit<import("./components.js").CollectionBindingOptions, "windowed"> & { fallback?: "list" | "reject" },
+  ): Promise<import("./components.js").CollectionBinding> {
+    const { CollectionBinder } = await import("./components.js");
+    const { fallback = "list", ...bindingOptions } = options;
+    const binder = new CollectionBinder(await this.capabilities(), { fallback });
+    return binder.bind(nodeKey, source, bindingOptions);
+  }
 }
