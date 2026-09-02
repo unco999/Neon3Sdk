@@ -277,3 +277,86 @@ export interface UiSnapshot {
   service: DebugSnapshot;
   host_inputs: ProgramInputSnapshot | null;
 }
+
+/** Typed view of one program-native semantic event (plan §3.2). */
+export class IntentEvent {
+  constructor(
+    readonly event_id: string,
+    readonly intent: string,
+    readonly source_node_key: string,
+    readonly payload: Record<string, unknown> = {},
+    readonly program_revision: number = 0,
+    readonly input_revision: number = 0,
+    readonly interaction: SemanticInteractionMetadata | Record<string, unknown> = {},
+    readonly kind: SemanticEventKind | string = "activate",
+    readonly wire_event: Record<string, unknown> = {},
+  ) {}
+
+  static fromInbound(event: Record<string, any>): IntentEvent {
+    const revision = event.program_revision ?? {};
+    return new IntentEvent(
+      String(event.event_id ?? ""),
+      String(event.intent ?? ""),
+      String(event.source_node_key ?? ""),
+      { ...(event.payload ?? {}) },
+      typeof revision === "object" ? Number(revision.revision ?? 0) : 0,
+      Number(event.input_revision ?? 0),
+      { ...(event.interaction ?? {}) },
+      String(event.kind ?? "activate"),
+      { ...event },
+    );
+  }
+
+  toWireEvent(): Record<string, unknown> {
+    if (Object.keys(this.wire_event).length) return this.wire_event;
+    return {
+      event_id: this.event_id,
+      kind: this.kind,
+      intent: this.intent,
+      source_node_key: this.source_node_key,
+      payload: this.payload,
+      program_revision: {},
+      input_revision: this.input_revision,
+      request_id: this.event_id,
+      idempotency_key: `intent:${this.event_id}`,
+      interaction: this.interaction,
+    };
+  }
+}
+
+/** Typed view of a renderer-resolved drag/drop commit (plan §3.2). */
+export class DropEvent {
+  constructor(
+    readonly source_key: string,
+    readonly target_key: string,
+    readonly payload: Record<string, unknown> = {},
+    readonly placement: string = "into",
+    readonly frame_sequence: number | null = null,
+    readonly generation: number | null = null,
+    readonly intent: string | null = null,
+    readonly event_id: string = "",
+    readonly source_node_key: string = "",
+    readonly target_node_key: string = "",
+    readonly presentation_template_key: string | null = null,
+    readonly wire_payload: Record<string, unknown> = {},
+  ) {}
+
+  static fromInbound(event: Record<string, any>, payload?: Record<string, unknown>): DropEvent {
+    const wire = { ...(event.payload ?? {}) } as Record<string, unknown>;
+    const interaction = { ...(event.interaction ?? {}) } as Record<string, unknown>;
+    return new DropEvent(
+      String(wire.source_key ?? ""),
+      String(wire.target_key ?? ""),
+      { ...(payload ?? {}) },
+      String(wire.placement ?? "into"),
+      typeof interaction.sequence === "number" ? interaction.sequence : null,
+      typeof interaction.renderer_epoch === "number" ? interaction.renderer_epoch : null,
+      event.intent ?? null,
+      String(event.event_id ?? ""),
+      String(wire.source_key ?? ""),
+      String(wire.target_key ?? ""),
+      (wire.presentation_template_key as string) ?? null,
+      wire,
+    );
+  }
+}

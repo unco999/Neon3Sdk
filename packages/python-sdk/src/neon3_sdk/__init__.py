@@ -5,6 +5,7 @@ from .calculator import CalculatorDomain, CalculatorServer
 from .capabilities import CapabilitySet, describe_capabilities, required_capabilities_for_flow, scan_flow, validate_flow_source
 from .errors import (
     CapabilityError,
+    DropRejectedError,
     DuplicateEventError,
     FlowValidationError,
     InvalidPublicationError,
@@ -21,9 +22,11 @@ from .models import (
     AssetRef,
     ClientIdentity,
     DebugSnapshot,
+    DropEvent,
     EventEnvelope,
     InputChange,
     InputSlot,
+    IntentEvent,
     ProgramInputSnapshot,
     ResolvedInputs,
     ResolvedInputValue,
@@ -40,6 +43,7 @@ from .models import (
 from .nui import ComponentGallery, GallerySubmission
 from .input import InputClient, KeyEvent
 from .render import Backend, BackendNegotiation, Camera3D, ColorSpace, ExternalSurface, PointerEvent, RenderClient, SurfaceKind, SurfaceOpen, SurfaceSize, SurfaceTarget, WorldInformation, WorldPlacement
+from .routing import DragSource, DropTarget, IntentRouter
 from .runtime import RuntimeConfig, RuntimeEndpoints, RuntimeMode, RuntimeSession, default_neon_root, runtime_version
 from .session import IntentResult, UiSession
 from .store import CollectionStore, ObservableStore, ScalarStore, SelectionStore, typed_value
@@ -62,10 +66,16 @@ __all__ = [
     "ComponentGallery",
     "CORE_ERROR_CODES",
     "DebugSnapshot",
+    "DragSource",
+    "DropEvent",
+    "DropRejectedError",
+    "DropTarget",
     "DuplicateEventError",
     "FlowValidationError",
     "GallerySubmission",
+    "IntentEvent",
     "IntentResult",
+    "IntentRouter",
     "ExternalSurface",
     "InputClient",
     "InputSlot",

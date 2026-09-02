@@ -14,6 +14,9 @@ export const ERROR_CODES = {
   DUPLICATE_EVENT: "duplicate_event",
   INVALID_PUBLICATION: "invalid_publication",
   INVALID_PROGRAM: "invalid_program",
+  // drop_rejected is an SDK routing outcome, not part of the frozen 6-code
+  // core contract asserted across languages in Stage 000.
+  DROP_REJECTED: "drop_rejected",
 } as const;
 
 export type SdkErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES] | string;
@@ -137,6 +140,23 @@ export class UnsupportedIntentError extends NeonError {
   constructor(intent: string, message = "") {
     super(message || `no handler is registered for intent: ${intent}`, { intent });
     this.intent = intent;
+  }
+}
+
+/**
+ * A drop target declined the payload by its `accepts` contract. Distinct from
+ * UnknownTargetError: the target exists but rejects this drag's type, so
+ * domain state must not change.
+ */
+export class DropRejectedError extends NeonError {
+  override code = ERROR_CODES.DROP_REJECTED;
+  override retryable = false;
+  readonly sourceKey: string;
+  readonly targetKey: string;
+  constructor(message = "drop target rejected the payload", details: { sourceKey?: string; targetKey?: string; accepted?: string[] } = {}) {
+    super(message, { source_key: details.sourceKey ?? "", target_key: details.targetKey ?? "", accepted: details.accepted ?? [] });
+    this.sourceKey = details.sourceKey ?? "";
+    this.targetKey = details.targetKey ?? "";
   }
 }
 

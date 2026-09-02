@@ -17,6 +17,9 @@ CAPABILITY_UNAVAILABLE = "capability_unavailable"
 DUPLICATE_EVENT = "duplicate_event"
 INVALID_PUBLICATION = "invalid_publication"
 INVALID_PROGRAM = "invalid_program"
+# drop_rejected is an SDK routing outcome, not part of the frozen 6-code
+# CORE_ERROR_CODES contract asserted across languages in Stage 000.
+DROP_REJECTED = "drop_rejected"
 
 CORE_ERROR_CODES = (
     STALE_REVISION,
@@ -166,6 +169,22 @@ class UnsupportedIntentError(NeonError):
     def __init__(self, intent: str, *, message: str = "") -> None:
         self.intent = intent
         super().__init__(message or f"no handler is registered for intent: {intent}", details={"intent": intent})
+
+
+class DropRejectedError(NeonError):
+    """A drop target declined the payload by its ``accepts`` contract.
+
+    Distinct from :class:`UnknownTargetError`: the target exists and is well
+    formed, but rejects this drag's type. Domain state must not change.
+    """
+
+    code = DROP_REJECTED
+    retryable = False
+
+    def __init__(self, message: str = "drop target rejected the payload", *, source_key: str = "", target_key: str = "", accepted: tuple[str, ...] = ()) -> None:
+        super().__init__(message, details={"source_key": source_key, "target_key": target_key, "accepted": list(accepted)})
+        self.source_key = source_key
+        self.target_key = target_key
 
 
 class DuplicateEventError(NeonError):

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 
@@ -409,4 +409,97 @@ class UiSnapshot:
             input_revision=scalar.input_revision if scalar else 0,
             renderer_epoch=self.service.epoch,
             frame_sequence=None,
+        )
+
+
+@dataclass(frozen=True)
+class IntentEvent:
+    """Typed view of one program-native semantic event (plan §3.2).
+
+    ``payload`` carries the SDK-level (business) payload, which may be richer
+    than the wire ``UiSemanticPayloadValue`` map; ``wire_event`` retains the
+    exact inbound envelope for diagnostics and re-serialization.
+    """
+
+    event_id: str
+    intent: str
+    source_node_key: str
+    payload: dict[str, Any] = field(default_factory=dict)
+    program_revision: int = 0
+    input_revision: int = 0
+    interaction: dict[str, Any] = field(default_factory=dict)
+    kind: str = "activate"
+    wire_event: dict[str, Any] = field(default_factory=dict, repr=False, compare=False)
+
+    @classmethod
+    def from_inbound(cls, event: dict[str, Any]) -> "IntentEvent":
+        revision = event.get("program_revision") or {}
+        return cls(
+            event_id=str(event.get("event_id", "")),
+            intent=str(event.get("intent", "")),
+            source_node_key=str(event.get("source_node_key", "")),
+            payload=dict(event.get("payload") or {}),
+            program_revision=int(revision.get("revision", 0)) if isinstance(revision, dict) else 0,
+            input_revision=int(event.get("input_revision", 0)),
+            interaction=dict(event.get("interaction") or {}),
+            kind=str(event.get("kind", "activate")),
+            wire_event=dict(event),
+        )
+
+    def to_wire_event(self) -> dict[str, Any]:
+        """Re-emit the canonical ``UiProgramSemanticEvent`` envelope."""
+        return self.wire_event or {
+            "event_id": self.event_id,
+            "kind": self.kind,
+            "intent": self.intent,
+            "source_node_key": self.source_node_key,
+            "payload": self.payload,
+            "program_revision": self.wire_event.get("program_revision", {}),
+            "input_revision": self.input_revision,
+            "request_id": self.wire_event.get("request_id", self.event_id),
+            "idempotency_key": self.wire_event.get("idempotency_key", f"intent:{self.event_id}"),
+            "interaction": self.interaction,
+        }
+
+
+@dataclass(frozen=True)
+class DropEvent:
+    """Typed view of a renderer-resolved drag/drop commit (plan §3.2).
+
+    ``payload`` is the SDK-level business payload produced by the drag
+    source factory; ``wire_payload`` is the closed ``UiDragDropPayload`` the
+    runtime accepts (source/target/placement only). The two intentionally
+    differ: business payload never crosses the wire unchanged.
+    """
+
+    source_key: str
+    target_key: str
+    payload: dict[str, Any] = field(default_factory=dict)
+    placement: str = "into"
+    frame_sequence: int | None = None
+    generation: int | None = None
+    intent: str | None = None
+    event_id: str = ""
+    source_node_key: str = ""
+    target_node_key: str = ""
+    presentation_template_key: str | None = None
+    wire_payload: dict[str, Any] = field(default_factory=dict, repr=False, compare=False)
+
+    @classmethod
+    def from_inbound(cls, event: dict[str, Any], *, payload: dict[str, Any] | None = None) -> "DropEvent":
+        wire = dict(event.get("payload") or {})
+        interaction = dict(event.get("interaction") or {})
+        return cls(
+            source_key=str(wire.get("source_key", "")),
+            target_key=str(wire.get("target_key", "")),
+            payload=dict(payload or {}),
+            placement=str(wire.get("placement", "into")),
+            frame_sequence=interaction.get("sequence"),
+            generation=interaction.get("renderer_epoch"),
+            intent=event.get("intent"),
+            event_id=str(event.get("event_id", "")),
+            source_node_key=str(wire.get("source_key", "")),
+            target_node_key=str(wire.get("target_key", "")),
+            presentation_template_key=wire.get("presentation_template_key"),
+            wire_payload=wire,
         )
