@@ -6,5 +6,6 @@ export * from "./input.js";
 export * from "./protocol.js";
 export * from "./render.js";
 export * from "./runtime.js";
+export * from "./session.js";
 export * from "./ui.js";
 export * from "./wire.js";

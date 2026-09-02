@@ -107,6 +107,13 @@ class CapabilitySet:
     def has(self, capability: str) -> bool:
         return capability in self.capabilities
 
+    def epoch_of(self, service: str) -> int | None:
+        """Epoch advertised by ``service``, or None when it was not queried."""
+        for name, epoch in zip(self.services, self.epochs):
+            if name == service:
+                return epoch
+        return None
+
     def missing(self, *capabilities: str) -> tuple[str, ...]:
         return tuple(name for name in capabilities if name not in self.capabilities)
 

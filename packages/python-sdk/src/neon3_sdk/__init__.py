@@ -41,6 +41,7 @@ from .nui import ComponentGallery, GallerySubmission
 from .input import InputClient, KeyEvent
 from .render import Backend, BackendNegotiation, Camera3D, ColorSpace, ExternalSurface, PointerEvent, RenderClient, SurfaceKind, SurfaceOpen, SurfaceSize, SurfaceTarget, WorldInformation, WorldPlacement
 from .runtime import RuntimeConfig, RuntimeEndpoints, RuntimeMode, RuntimeSession, default_neon_root, runtime_version
+from .session import IntentResult, UiSession
 from .ui import UiClient, UiProgram
 from .event import EventClient, EventFilter, EventSubscription
 from .wire import CORE_ERROR_CODES, canonical_json, fixture_path, load_fixture
@@ -62,6 +63,7 @@ __all__ = [
     "DuplicateEventError",
     "FlowValidationError",
     "GallerySubmission",
+    "IntentResult",
     "ExternalSurface",
     "InputClient",
     "InputSlot",
@@ -96,6 +98,7 @@ __all__ = [
     "UiClient",
     "UiProgram",
     "UiProgramRevisionInfo",
+    "UiSession",
     "UiSnapshot",
     "UiTraceRecord",
     "canonical_json",

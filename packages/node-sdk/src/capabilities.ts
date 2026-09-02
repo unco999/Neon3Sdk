@@ -95,6 +95,12 @@ export class CapabilitySet {
 
   has(capability: string): boolean { return this.capabilities.has(capability); }
 
+  /** Epoch advertised by `service`, or null when it was not queried. */
+  epochOf(service: string): number | null {
+    const index = this.services.indexOf(service);
+    return index >= 0 ? this.epochs[index] ?? null : null;
+  }
+
   missing(...capabilities: string[]): string[] { return capabilities.filter((name) => !this.capabilities.has(name)); }
 
   require(...capabilities: string[]): this {

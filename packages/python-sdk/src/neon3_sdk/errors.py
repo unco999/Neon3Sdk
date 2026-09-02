@@ -138,8 +138,12 @@ class StaleRevisionError(NeonError):
     code = STALE_REVISION
     retryable = True
 
-    def __init__(self, message: str = "revision is stale", *, expected: Any = None, actual: Any = None) -> None:
-        super().__init__(message, details={"expected": expected, "actual": actual})
+    def __init__(self, message: str = "revision is stale", *, expected: Any = None, actual: Any = None, refreshed: bool = False, runtime_code: str = "") -> None:
+        super().__init__(message, details={"expected": expected, "actual": actual, "refreshed": refreshed, "runtime_code": runtime_code})
+        self.expected = expected
+        self.actual = actual
+        self.refreshed = refreshed
+        self.runtime_code = runtime_code
 
 
 class UnknownTargetError(NeonError):

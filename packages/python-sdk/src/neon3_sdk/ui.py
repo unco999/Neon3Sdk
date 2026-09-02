@@ -80,6 +80,17 @@ class UiClient:
     def submit_flow_file(self, path: str | Path, **kwargs: Any) -> UiProgram:
         return self.submit_flow(Path(path).read_text(encoding="utf-8"), **kwargs)
 
+    @property
+    def session(self) -> "Any":
+        """Lazily-created revision-aware :class:`neon3_sdk.session.UiSession`.
+
+        Import is deferred because the session layer depends on this module.
+        """
+        if getattr(self, "_session", None) is None:
+            from .session import UiSession
+            self._session = UiSession(self)
+        return self._session
+
     def host_inbound(self, event: dict[str, Any], *, idempotency_key: str | None = None) -> Any:
         return self.client.call(self.target, "ui.host.inbound", event, idempotency_key=idempotency_key or f"ui-host:{uuid.uuid4()}").result
 

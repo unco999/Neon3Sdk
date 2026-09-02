@@ -53,6 +53,15 @@ function parseUiProgram(result: FlowSubmissionResult): UiProgram {
 export class UiClient {
   active: UiProgram | null = null;
   private capabilitiesPromise: Promise<CapabilitySet> | null = null;
+  private sessionPromise: Promise<import("./session.js").UiSession> | null = null;
+
+  /** Lazily-created revision-aware UiSession, mirroring `app.ui.session`. */
+  get session(): Promise<import("./session.js").UiSession> {
+    if (!this.sessionPromise) {
+      this.sessionPromise = import("./session.js").then(({ UiSession }) => new UiSession(this));
+    }
+    return this.sessionPromise;
+  }
 
   constructor(readonly client: NeonClient, readonly target = "ui-runtime") {}
 
