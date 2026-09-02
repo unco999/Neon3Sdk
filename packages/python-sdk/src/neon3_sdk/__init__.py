@@ -2,7 +2,21 @@
 
 from .client import NeonClient
 from .calculator import CalculatorDomain, CalculatorServer
-from .errors import NeonError, ProtocolError, RemoteError, TransportError
+from .capabilities import CapabilitySet, describe_capabilities, required_capabilities_for_flow, scan_flow, validate_flow_source
+from .errors import (
+    CapabilityError,
+    DuplicateEventError,
+    FlowValidationError,
+    InvalidPublicationError,
+    NeonError,
+    ProtocolError,
+    RemoteError,
+    StaleRevisionError,
+    TransportError,
+    UnknownTargetError,
+    UnsupportedIntentError,
+    normalize_error_code,
+)
 from .models import (
     AssetRef,
     ClientIdentity,
@@ -33,6 +47,8 @@ from .wire import CORE_ERROR_CODES, canonical_json, fixture_path, load_fixture
 
 __all__ = [
     "AssetRef",
+    "CapabilityError",
+    "CapabilitySet",
     "ClientIdentity",
     "CalculatorDomain",
     "CalculatorServer",
@@ -43,10 +59,13 @@ __all__ = [
     "ComponentGallery",
     "CORE_ERROR_CODES",
     "DebugSnapshot",
+    "DuplicateEventError",
+    "FlowValidationError",
     "GallerySubmission",
     "ExternalSurface",
     "InputClient",
     "InputSlot",
+    "InvalidPublicationError",
     "ProgramInputSnapshot",
     "PointerEvent",
     "KeyEvent",
@@ -62,11 +81,14 @@ __all__ = [
     "SemanticInteractionMetadata",
     "ServiceDescription",
     "ServiceHealth",
+    "StaleRevisionError",
     "SurfaceKind",
     "SurfaceOpen",
     "SurfaceSize",
     "SurfaceTarget",
     "TransportError",
+    "UnknownTargetError",
+    "UnsupportedIntentError",
     "RuntimeConfig",
     "RuntimeEndpoints",
     "RuntimeMode",
@@ -78,9 +100,14 @@ __all__ = [
     "UiTraceRecord",
     "canonical_json",
     "default_neon_root",
+    "describe_capabilities",
     "fixture_path",
     "load_fixture",
+    "normalize_error_code",
+    "required_capabilities_for_flow",
     "runtime_version",
+    "scan_flow",
+    "validate_flow_source",
     "EventClient",
     "EventFilter",
     "EventSubscription",

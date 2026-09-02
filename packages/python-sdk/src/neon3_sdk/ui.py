@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .client import NeonClient
+from .capabilities import CapabilitySet, describe_capabilities, validate_flow_source
 from .models import UiProgramRevisionInfo, UiSnapshot, UiTraceRecord
 
 
@@ -36,8 +37,40 @@ class UiClient:
         self.client = client
         self.target = target
         self.active: UiProgram | None = None
+        self._capabilities: CapabilitySet | None = None
 
-    def submit_flow(self, source: str, *, idempotency_key: str | None = None) -> UiProgram:
+    def capabilities(self, *, refresh: bool = False) -> CapabilitySet:
+        """Advertised runtime capabilities for this UI session target, cached.
+
+        Only the UI service is queried here; renderer-only capabilities (hit
+        targets, canvas point/line pipelines) are negotiated by the render-bound
+        component helpers, not by Flow submission validation.
+        """
+        if self._capabilities is None or refresh:
+            self._capabilities = describe_capabilities(self.client, targets=(self.target,))
+        return self._capabilities
+
+    def require_capabilities(self, *capabilities: str) -> CapabilitySet:
+        """Fail before any submission when the runtime lacks a capability."""
+        return self.capabilities().require(*capabilities, service=self.target)
+
+    def validate_flow(self, source: str, *, require: tuple[str, ...] = ()) -> tuple[str, ...]:
+        """Statically validate a Flow against the closed vocabulary and the
+        connected runtime's advertised capabilities.
+
+        Returns the capabilities the Flow requires. Raises
+        ``CapabilityError`` when one is missing (including names in
+        ``require``) or ``FlowValidationError`` with a line/column for
+        vocabulary errors.
+        """
+        gaps = tuple(require)
+        if gaps:
+            self.require_capabilities(*gaps)
+        return validate_flow_source(source, self.capabilities(), service=self.target)
+
+    def submit_flow(self, source: str, *, idempotency_key: str | None = None, validate: bool = True) -> UiProgram:
+        if validate:
+            self.validate_flow(source)
         result = self.client.call(self.target, "ui.flow.submit", {"source": source}, idempotency_key=idempotency_key or f"ui-flow:{uuid.uuid4()}").result
         if not isinstance(result, dict):
             raise ValueError("ui.flow.submit returned an invalid result")

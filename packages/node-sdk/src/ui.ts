@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { NeonClient } from "./client.js";
+import { CapabilitySet, describeCapabilities, validateFlowSource } from "./capabilities.js";
 import {
   DebugSnapshot,
   HostFragmentContext,
@@ -51,10 +52,36 @@ function parseUiProgram(result: FlowSubmissionResult): UiProgram {
 
 export class UiClient {
   active: UiProgram | null = null;
+  private capabilitiesPromise: Promise<CapabilitySet> | null = null;
 
   constructor(readonly client: NeonClient, readonly target = "ui-runtime") {}
 
-  async submitFlow(source: string, options: UiCallOptions = {}): Promise<UiProgram> {
+  /** Advertised runtime capabilities for this UI session target, cached. */
+  capabilities(options: { refresh?: boolean } = {}): Promise<CapabilitySet> {
+    if (!this.capabilitiesPromise || options.refresh) {
+      this.capabilitiesPromise = describeCapabilities(this.client, [this.target]);
+    }
+    return this.capabilitiesPromise;
+  }
+
+  /** Fail before any submission when the runtime lacks a capability. */
+  async requireCapabilities(...capabilities: string[]): Promise<CapabilitySet> {
+    const set = await this.capabilities();
+    return set.require(...capabilities);
+  }
+
+  /**
+   * Statically validate a Flow against the closed vocabulary and the
+   * connected runtime's advertised capabilities. Returns the capabilities
+   * the Flow requires; throws CapabilityError / FlowValidationError.
+   */
+  async validateFlow(source: string, options: { require?: string[] } = {}): Promise<string[]> {
+    if (options.require?.length) await this.requireCapabilities(...options.require);
+    return validateFlowSource(source, await this.capabilities(), this.target);
+  }
+
+  async submitFlow(source: string, options: UiCallOptions & { validate?: boolean } = {}): Promise<UiProgram> {
+    if (options.validate ?? true) await this.validateFlow(source);
     const response = await this.client.call<FlowSubmissionResult>(this.target, "ui.flow.submit", { source }, { idempotencyKey: options.idempotencyKey ?? `ui-flow:${crypto.randomUUID()}` });
     const result = response.result;
     if (!result || typeof result.surface_id !== "string" || !result.program_revision || !result.input_schema) {
