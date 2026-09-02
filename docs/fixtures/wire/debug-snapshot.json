@@ -1,0 +1,8 @@
+{
+  "active_jobs": [],
+  "capabilities": ["ui.program.v1", "ui.semantic_input.v1"],
+  "epoch": 4,
+  "health": "healthy",
+  "revision": 9,
+  "service": "ui-runtime"
+}

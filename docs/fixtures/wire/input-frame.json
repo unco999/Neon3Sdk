@@ -1,0 +1,15 @@
+{
+  "changes": [
+    {"key": "count", "value": {"kind": "i32", "value": 3}},
+    {"key": "status", "value": {"kind": "enum", "value": "ready"}}
+  ],
+  "expected_input_revision": 8,
+  "idempotency_key": "input:pub-0001",
+  "program_revision": {
+    "capabilities": [],
+    "program_id": "contract-demo",
+    "revision": 1,
+    "schema_version": 1
+  },
+  "request_id": "pub-0001"
+}

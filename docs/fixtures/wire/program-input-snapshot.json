@@ -1,0 +1,25 @@
+{
+  "grid_inputs": [],
+  "scalar_inputs": {
+    "changed_slots": ["count", "status"],
+    "input_revision": 8,
+    "program_revision": {
+      "capabilities": [],
+      "program_id": "contract-demo",
+      "revision": 1,
+      "schema_version": 1
+    },
+    "values": {
+      "count": {
+        "last_update_revision": 8,
+        "source": "reliable_external",
+        "value": {"kind": "i32", "value": 3}
+      },
+      "status": {
+        "last_update_revision": 8,
+        "source": "reliable_external",
+        "value": {"kind": "enum", "value": "ready"}
+      }
+    }
+  }
+}

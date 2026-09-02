@@ -1,0 +1,7 @@
+{
+  "capabilities": ["ui.program.v1", "ui.semantic_input.v1"],
+  "epoch": 4,
+  "endpoint": "headless://ui-runtime",
+  "protocol_version": {"major": 1, "minor": 0},
+  "service": "ui-runtime"
+}

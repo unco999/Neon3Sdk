@@ -1,0 +1,23 @@
+{
+  "event": {
+    "event_id": "evt-0001",
+    "idempotency_key": "intent:evt-0001",
+    "input_revision": 7,
+    "intent": "contract.item.select",
+    "interaction": {"interaction_id": "it-0001", "renderer_epoch": 4, "sequence": 12},
+    "kind": "activate",
+    "payload": {
+      "count": {"kind": "i32", "value": 3},
+      "item_id": {"kind": "enum", "value": "item-42"}
+    },
+    "program_revision": {
+      "capabilities": [],
+      "program_id": "contract-demo",
+      "revision": 1,
+      "schema_version": 1
+    },
+    "request_id": "evt-0001",
+    "source_node_key": "row-42"
+  },
+  "kind": "semantic_intent"
+}

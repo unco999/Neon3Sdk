@@ -1,0 +1,36 @@
+{
+  "input_schema": {
+    "grid_slots": [],
+    "layout_hash": "sha256:contract-demo",
+    "schema_id": "contract-demo.inputs",
+    "slots": [
+      {
+        "default_value": {"kind": "f32", "value": 0},
+        "key": "count",
+        "kind": {"kind": "f32"},
+        "packing": {"alignment": 4, "lanes": 1, "offset": 0, "representation": "f32"},
+        "semantic_label": "Count",
+        "update_class": "reliable_external"
+      },
+      {
+        "default_value": {"kind": "enum", "value": "idle"},
+        "key": "status",
+        "kind": {"kind": "enum", "variants": ["idle", "ready"]},
+        "packing": {"alignment": 4, "lanes": 1, "offset": 4, "representation": "u32"},
+        "semantic_label": "Status",
+        "update_class": "reliable_external"
+      }
+    ],
+    "version": 1
+  },
+  "program_revision": {
+    "capabilities": [
+      {"name": "ui.program.v1", "owner": "ui_runtime", "status": "supported", "version": 1},
+      {"name": "ui.semantic_input.v1", "owner": "ui_runtime", "status": "supported", "version": 1}
+    ],
+    "program_id": "contract-demo",
+    "revision": 1,
+    "schema_version": 1
+  },
+  "surface_id": "surface.contract-demo"
+}

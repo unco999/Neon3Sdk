@@ -1,0 +1,37 @@
+{
+  "active_fragment": {
+    "effects": [],
+    "fragment": {"id": "fragment.contract-demo", "revision": 9},
+    "root": {
+      "bounds": {"height": 360, "width": 640, "x": 0, "y": 0},
+      "children": [],
+      "enabled": true,
+      "kind": "panel",
+      "node_id": "root",
+      "text_key": null,
+      "visible": true
+    }
+  },
+  "event": {
+    "drag_key": "drag-item-row-42",
+    "drop_key": "drop-slot-1",
+    "event_id": "evt-0002",
+    "idempotency_key": "drop:evt-0002",
+    "input_revision": 8,
+    "intent": "contract.item.equip",
+    "interaction": {"interaction_id": "it-0002", "renderer_epoch": 4, "sequence": 13},
+    "payload": {
+      "placement": "into",
+      "source_key": "row-42",
+      "target_key": "slot-1"
+    },
+    "program_revision": {
+      "capabilities": [],
+      "program_id": "contract-demo",
+      "revision": 1,
+      "schema_version": 1
+    },
+    "request_id": "evt-0002"
+  },
+  "kind": "drag_drop"
+}

@@ -1,0 +1,54 @@
+{
+  "grid_inputs": [
+    {
+      "frame": {
+        "expected_program_revision": {
+          "capabilities": [],
+          "program_id": "contract-demo",
+          "revision": 1,
+          "schema_version": 1
+        },
+        "first_row": 0,
+        "list_revision": 3,
+        "total_rows": 1000,
+        "window_rows": [
+          {
+            "cells": {
+              "name": {
+                "display": {"generation": 1, "id": 11},
+                "value": {"kind": "enum", "value": "compass"}
+              }
+            },
+            "stable_row_key": "item-42"
+          },
+          {
+            "cells": {
+              "name": {
+                "display": {"generation": 1, "id": 12},
+                "value": {"kind": "enum", "value": "lantern"}
+              }
+            },
+            "stable_row_key": "item-43"
+          }
+        ]
+      },
+      "source_key": "grid-items"
+    }
+  ],
+  "presentation_update": null,
+  "scalar_frame": {
+    "changes": [
+      {"key": "count", "value": {"kind": "i32", "value": 3}},
+      {"key": "status", "value": {"kind": "enum", "value": "ready"}}
+    ],
+    "expected_input_revision": 8,
+    "idempotency_key": "publication:pub-0002",
+    "program_revision": {
+      "capabilities": [],
+      "program_id": "contract-demo",
+      "revision": 1,
+      "schema_version": 1
+    },
+    "request_id": "pub-0002"
+  }
+}
