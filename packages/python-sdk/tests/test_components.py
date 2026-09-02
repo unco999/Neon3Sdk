@@ -48,12 +48,12 @@ class StableIdentityTests(unittest.TestCase):
     def test_node_keys_use_stable_business_keys_not_index(self) -> None:
         store = _store_with([item("a", "Alpha"), item("b", "Beta")])
         binding = CollectionBinder(grid_capabilities()).bind("backpack", store.collection("items"), columns=columns)
-        self.assertEqual(binding.stable_node_key(item("b", "Beta")), "backpack:b")
-        self.assertEqual(binding.key_for_node("backpack:b"), "b")
-        self.assertIsNone(binding.key_for_node("elsewhere:b"))
+        self.assertEqual(binding.stable_node_key(item("b", "Beta")), "backpack.b")
+        self.assertEqual(binding.key_for_node("backpack.b"), "b")
+        self.assertIsNone(binding.key_for_node("elsewhere.b"))
         # identity survives reorder: the same item key maps to the same node key
         store.collection("items").move("a", 1)
-        self.assertEqual(binding.stable_node_key(item("b", "Beta")), "backpack:b")
+        self.assertEqual(binding.stable_node_key(item("b", "Beta")), "backpack.b")
 
     def test_drag_and_selection_payloads_carry_stable_keys(self) -> None:
         store = _store_with([item("gem-1", "Gem")])
@@ -71,7 +71,7 @@ class StableIdentityTests(unittest.TestCase):
         entry = store.collection("items").get("gem-1")
         payload = payload_for(entry)
         self.assertEqual(payload["item_id"], "gem-1")
-        self.assertEqual(payload["source_node_key"], "backpack:gem-1")  # stable key, not coordinates
+        self.assertEqual(payload["source_node_key"], "backpack.gem-1")  # stable key, not coordinates
         self.assertEqual(kind_for(entry), "gem")
 
     def test_drag_default_payload_and_kind(self) -> None:
@@ -79,8 +79,17 @@ class StableIdentityTests(unittest.TestCase):
         binding = CollectionBinder(grid_capabilities()).bind("grid", store.collection("items"), columns=columns, drag=DragSpec(intent="domain.item.move"))
         _key, payload_for, kind_for = binding.drag_source_spec()
         entry = store.collection("items").get("a")
-        self.assertEqual(payload_for(entry), {"item_key": "a", "kind": "grid", "source_node_key": "grid:a", "intent": "domain.item.move"})
+        self.assertEqual(payload_for(entry), {"item_key": "a", "kind": "grid", "source_node_key": "grid.a", "intent": "domain.item.move"})
         self.assertEqual(kind_for(entry), "grid")
+
+    def test_no_drag_spec_falls_back_to_item_kind(self) -> None:
+        store = _store_with([{"key": "gem-9", "kind": "material"}])
+        store.collection("items").set_key_of(lambda entry: entry["key"])
+        binding = CollectionBinder(grid_capabilities()).bind("backpack", store.collection("items"), columns=columns)
+        _key, payload_for, kind_for = binding.drag_source_spec()
+        entry = store.collection("items").get("gem-9")
+        self.assertEqual(payload_for(entry), {"item_key": "gem-9", "kind": "material", "source_node_key": "backpack.gem-9"})
+        self.assertEqual(kind_for(entry), "material")
 
 
 class MinimalGridChangesTests(unittest.TestCase):

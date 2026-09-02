@@ -10,6 +10,21 @@ python -m pip install --upgrade neon3-sdk
 
 Package page: https://pypi.org/project/neon3-sdk/
 
+## Application API
+
+```python
+from neon3_sdk import NeonApp, ObservableStore
+
+with NeonApp.start(mode="windowed", origin="my-app") as app:
+    state = ObservableStore({"selected": None})
+    app.ui.mount_flow_file("app.nui")
+    app.intent("domain.select")(lambda event: state.value("selected").set(event.payload["key"]))
+    app.run()
+```
+
+`NeonApp` manages runtime lifecycle, UI revisions, intent routing, and Store
+publication. Direct `NeonClient` remains available for protocol-level code.
+
 ## Start Neon3
 
 `RuntimeSession` starts the Neon3 services as separate processes. On Windows it

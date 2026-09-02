@@ -53,6 +53,7 @@ export class IntentRouter {
   private readonly dragSources = new Map<string, DragSource>();
   private readonly dropTargets = new Map<string, DropTarget>();
   private catalog = new Map<string, any>();
+  private readonly bindings: Array<any> = [];
 
   /** Register a handler for an exact intent or `prefix.*` (or `*` default). */
   on(intent: string, handler?: IntentHandler): IntentHandler | ((handler: IntentHandler) => IntentHandler) {
@@ -92,6 +93,8 @@ export class IntentRouter {
     this.catalog = new Map(Object.entries(items));
   }
 
+  addBinding(binding: any): void { this.bindings.push(binding); }
+
   hasIntent(intent: string): boolean {
     if (this.exact.has(intent) || this.defaultHandler) return true;
     return this.prefixes.some(([prefix]) => intent.startsWith(prefix));
@@ -130,11 +133,22 @@ export class IntentRouter {
       const targetKey = String(wire.target_key ?? "");
       const target = this.dropTargets.get(targetKey);
       if (!target) throw new UnknownTargetError(targetKey, "drop");
+      let payload: Record<string, unknown>;
+      let kind2: string;
       const source = this.dragSources.get(sourceKey);
-      if (!source) throw new UnknownTargetError(sourceKey, "drag");
-      const item = this.catalog.get(sourceKey);
-      const payload = item !== undefined ? source.payload(item) : {};
-      const kind2 = String((payload as Record<string, unknown>).kind ?? source.kind(item));
+      if (source) {
+        const item = this.catalog.get(sourceKey);
+        payload = item !== undefined ? source.payload(item) : {};
+        kind2 = String(payload.kind ?? source.kind(item));
+      } else {
+        const binding = this.bindings.find((candidate) => candidate.keyForNode(sourceKey) !== null);
+        if (!binding) throw new UnknownTargetError(sourceKey, "drag");
+        const itemKey = binding.keyForNode(sourceKey) as string;
+        const item = binding.source.get(itemKey);
+        const [, payloadFor, kindFor] = binding.dragSourceSpec();
+        payload = payloadFor(item);
+        kind2 = String(payload.kind ?? kindFor(item));
+      }
       if (!target.acceptsKind(kind2)) {
         throw new DropRejectedError(`drop target '${targetKey}' does not accept kind '${kind2}'`, {
           sourceKey,

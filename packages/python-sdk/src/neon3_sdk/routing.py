@@ -66,6 +66,7 @@ class IntentRouter:
         self._drag_sources: dict[str, DragSource] = {}
         self._drop_targets: dict[str, DropTarget] = {}
         self._catalog: dict[str, Any] = {}  # stable node key -> domain item
+        self._bindings: list[Any] = []  # CollectionBinding list for list-drag resolution
 
     # -- registration -------------------------------------------------------
 
@@ -109,6 +110,15 @@ class IntentRouter:
     def register_catalog(self, key_of: Callable[[Any], str], items: Iterable[Any]) -> None:
         self._catalog = {key_of(item): item for item in items}
 
+    def add_binding(self, binding: Any) -> None:
+        """Register a CollectionBinding so its list items resolve on drop.
+
+        List rows are dynamic, so instead of a drag source per item the
+        binding supplies a ``<node_key>:<stable key>`` prefix resolver used by
+        :meth:`resolve_inbound` when no explicit drag source matches.
+        """
+        self._bindings.append(binding)
+
     # -- lookup -------------------------------------------------------------
 
     def has_intent(self, intent: str) -> bool:
@@ -125,6 +135,15 @@ class IntentRouter:
         if self._default is not None:
             return self._default
         raise UnsupportedIntentError(intent)
+
+    def run_handler(self, event: IntentEvent | DropEvent) -> Any:
+        """Resolve and synchronously invoke the handler for a typed event.
+
+        Returns whatever the handler returns; an awaitable coroutine is left
+        for the caller to await (so host loops keep control of the event loop).
+        """
+        intent = event.intent if isinstance(event, IntentEvent) else (event.intent or "")
+        return self.handler_for(intent or "")(event)
 
     # -- dispatch -----------------------------------------------------------
 
@@ -166,13 +185,8 @@ class IntentRouter:
             target_key = str(wire.get("target_key", ""))
             if target_key not in self._drop_targets:
                 raise UnknownTargetError(target_key, kind="drop")
-            if source_key not in self._drag_sources:
-                raise UnknownTargetError(source_key, kind="drag")
+            payload, drop_kind = self._resolve_drag(source_key)
             target = self._drop_targets[target_key]
-            item = self._catalog.get(source_key)
-            source = self._drag_sources[source_key]
-            payload = source.payload(item) if item is not None else {}
-            drop_kind = str(payload.get("kind", source.kind(item)))
             if not target.accepts_kind(drop_kind):
                 raise DropRejectedError(
                     f"drop target {target_key!r} does not accept kind {drop_kind!r}",
@@ -186,6 +200,32 @@ class IntentRouter:
             resolved = {**event, "intent": event.get("intent") or target.intent}
             return DropEvent.from_inbound(resolved, payload=payload)
         raise UnsupportedIntentError(f"<unknown inbound kind: {kind}>")
+
+    def _resolve_drag(self, source_key: str) -> tuple[dict[str, Any], str]:
+        """Resolve a drag's business payload and kind from explicit sources or bindings.
+
+        Explicit ``drag_source`` registrations win; otherwise a registered
+        collection binding whose ``<node_key>:`` prefix matches ``source_key``
+        resolves the underlying catalog item. A key that matches neither is an
+        :class:`UnknownTargetError`, never a business rejection.
+        """
+        if source_key in self._drag_sources:
+            source = self._drag_sources[source_key]
+            item = self._catalog.get(source_key)
+            payload = source.payload(item) if item is not None else {}
+            return payload, str(payload.get("kind", source.kind(item)))
+        for binding in self._bindings:
+            item_key = binding.key_for_node(source_key)
+            if item_key is None:
+                continue
+            try:
+                item = binding.source.get(item_key)
+            except KeyError:
+                item = None
+            _router_key, payload_for, kind_for = binding.drag_source_spec()
+            payload = payload_for(item) if item is not None else {"item_key": item_key, "kind": binding.node_key}
+            return payload, str(payload.get("kind", kind_for(item) if item is not None else binding.node_key))
+        raise UnknownTargetError(source_key, kind="drag")
 
     # -- introspection ------------------------------------------------------
 

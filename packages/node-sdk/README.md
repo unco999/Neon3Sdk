@@ -10,6 +10,25 @@ npm install @neon3/sdk
 
 Package page: https://www.npmjs.com/package/@neon3/sdk
 
+## Application API
+
+```ts
+import { NeonApp, ObservableStore } from "@neon3/sdk";
+
+const app = await NeonApp.start({ mode: "windowed", origin: "my-app" });
+try {
+  const state = new ObservableStore({ selected: null });
+  await app.ui.mountFlowFile("app.nui");
+  app.intent("domain.select")((event: any) => state.value("selected").set(event.payload.key));
+  await app.runOnce([]);
+} finally {
+  await app.stop();
+}
+```
+
+`NeonApp` manages runtime lifecycle, UI revisions, intent routing, and Store
+publication. Direct `NeonClient` remains available for protocol-level code.
+
 ## Start Neon3
 
 `RuntimeSession` starts `neon-eventd`, `neon-wgpu-runtime`, and

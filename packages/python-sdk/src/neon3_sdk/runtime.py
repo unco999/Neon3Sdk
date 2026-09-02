@@ -32,9 +32,17 @@ def _resolve_runtime_version(version: str) -> str:
         f"https://api.github.com/repos/{NEON3_RUNTIME_REPOSITORY}/releases/latest",
         headers={"Accept": "application/vnd.github+json", "User-Agent": "neon3-sdk"},
     )
-    with urllib.request.urlopen(request, timeout=30) as response:
-        release = json.loads(response.read().decode("utf-8"))
-    tag = release.get("tag_name")
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            release = json.loads(response.read().decode("utf-8"))
+        tag = release.get("tag_name")
+    except Exception:
+        # GitHub API rate limits are common behind shared proxies. The release
+        # page still redirects deterministically to /releases/tag/<version>.
+        with urllib.request.urlopen("https://github.com/unco999/Neon3-CiJian/releases/latest", timeout=30) as response:
+            marker = "/releases/tag/"
+            location = response.geturl()
+            tag = location.split(marker, 1)[1].split("/", 1)[0] if marker in location else None
     if not isinstance(tag, str) or not tag.strip():
         raise RuntimeError("GitHub latest Neon3 release did not contain tag_name")
     return tag

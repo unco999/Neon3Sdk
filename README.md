@@ -1,5 +1,7 @@
 # Neon3 SDK
 
+![Neon3 SDK](docs/neon3-sdk-intro.png)
+
 Python and Node.js clients for the [Neon3](https://github.com/unco999/Neon3-CiJian)
 control-plane protocols: `neon3.rpc` and `neon3.event`.
 
@@ -13,6 +15,40 @@ control-plane protocols: `neon3.rpc` and `neon3.event`.
 python -m pip install --upgrade neon3-sdk
 npm install @neon3/sdk
 ```
+
+## From RPC to NeonApp
+
+Use `NeonClient` and `UiClient` when you need direct protocol control. For an
+application, `NeonApp` owns runtime lifecycle, UI sessions, revisions, intent
+routing, and store publication on both Python and Node.js:
+
+```python
+from neon3_sdk import NeonApp, ObservableStore
+
+with NeonApp.start(mode="windowed", origin="my-app") as app:
+    state = ObservableStore({"selected": None})
+    app.ui.mount_flow_file("app.nui")
+    app.intent("domain.select")(lambda event: state.value("selected").set(event.payload["key"]))
+    app.run()
+```
+
+```ts
+import { NeonApp, ObservableStore } from "@neon3/sdk";
+
+const app = await NeonApp.start({ mode: "windowed", origin: "my-app" });
+try {
+  const state = new ObservableStore({ selected: null });
+  await app.ui.mountFlowFile("app.nui");
+  app.intent("domain.select")((event) => state.value("selected").set(event.payload.key));
+  await app.runOnce([]);
+} finally {
+  await app.stop();
+}
+```
+
+The application API fills request IDs, idempotency keys, program/input
+revisions, interaction metadata, and publication envelopes. Domain state stays
+in the caller-owned `ObservableStore`; inventory is only an example fixture.
 
 ## Runtime
 

@@ -105,14 +105,26 @@ class UiSession:
         ``refresh()``.
         """
         program = self.ui.submit_flow(source, idempotency_key=idempotency_key, validate=validate)
+        return self.adopt(program)
+
+    def adopt(self, program: UiProgram, *, synchronize: bool = True) -> UiProgram:
+        """Adopt an already-submitted program, resetting and re-synchronizing.
+
+        Used by ``mount_flow`` and by hosts (NeonApp) that submit through a
+        shared client and hand the program to the session. ``synchronize=False``
+        skips the runtime refresh for offline/fixture adoption where no
+        authoritative host snapshot exists yet.
+        """
         self.program = program
+        self.ui.active = program
         self.input_revision = 0
         self.frame_sequence = None
         self.interaction_sequence = 0
         self._dispatched.clear()
         self._published.clear()
-        self._resolve_renderer_epoch(refresh=True)
-        self.refresh()
+        if synchronize:
+            self._resolve_renderer_epoch(refresh=True)
+            self.refresh()
         return program
 
     def mount_flow_file(self, path: str | Path, **kwargs: Any) -> UiProgram:

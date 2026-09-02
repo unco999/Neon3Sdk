@@ -31,6 +31,10 @@ from .store import CollectionStore
 
 DATA_GRID_WINDOW_CAPABILITY = "ui.data_grid.window.v1"
 
+# Node keys the runtime accepts match ``[A-Za-z0-9._-]`` (nui_flow invalid_key
+# rule); the binding row separator must stay inside that set, so it is a dot.
+KEY_SEPARATOR = "."
+
 GridCell = dict[str, Any]  # {"value": typed|raw, "display": {"id": n, "generation": g}}
 ColumnMapper = Callable[[Any], dict[str, GridCell]]
 
@@ -50,6 +54,12 @@ def _read_flag(store: Any) -> bool:
     return bool(value)
 
 
+def default_drag_payload(item: Any, key: str, node_key: str) -> dict[str, Any]:
+    """Default payload: stable key plus the item's own kind when present."""
+    kind = item.get("kind") if isinstance(item, dict) else getattr(item, "kind", None)
+    return {"item_key": key, "kind": str(kind) if kind is not None else node_key}
+
+
 @dataclass(frozen=True)
 class DragSpec:
     """Declarative drag intent for items sourced from this collection.
@@ -63,8 +73,8 @@ class DragSpec:
     payload_for: Callable[[Any], dict[str, Any]] | None = None
 
     def payload(self, item: Any, key: str, node_key: str) -> dict[str, Any]:
-        base = self.payload_for(item) if self.payload_for else {"item_key": key, "kind": node_key}
-        return {**base, "source_node_key": f"{node_key}:{key}", "intent": self.intent}
+        base = self.payload_for(item) if self.payload_for else default_drag_payload(item, key, node_key)
+        return {**base, "source_node_key": f"{node_key}{KEY_SEPARATOR}{key}", "intent": self.intent}
 
 
 @dataclass(frozen=True)
@@ -125,10 +135,10 @@ class CollectionBinding:
 
     def stable_node_key(self, item: Any) -> str:
         """Fixed rule: binding node key + stable business key, never array index."""
-        return f"{self.node_key}:{self.item_key(item)}"
+        return f"{self.node_key}{KEY_SEPARATOR}{self.item_key(item)}"
 
     def key_for_node(self, node_key: str) -> str | None:
-        prefix = f"{self.node_key}:"
+        prefix = f"{self.node_key}{KEY_SEPARATOR}"
         return node_key[len(prefix):] if node_key.startswith(prefix) else None
 
     def selected_key(self) -> str | None:
@@ -192,7 +202,7 @@ class CollectionBinding:
         """
         def payload(item: Any) -> dict[str, Any]:
             if self.drag is None:
-                return {"item_key": self.item_key(item), "kind": self.node_key}
+                return {**default_drag_payload(item, self.item_key(item), self.node_key), "source_node_key": self.stable_node_key(item)}
             return self.drag.payload(item, self.item_key(item), self.node_key)
 
         def kind_of(item: Any) -> str:

@@ -36,11 +36,11 @@ function storeWith(items: any[]): ObservableStore {
 test("node keys use stable business keys, not index", () => {
   const store = storeWith([item("a", "Alpha"), item("b", "Beta")]);
   const binding = new CollectionBinder(gridCapabilities()).bind("backpack", store.collection("items"), { columns });
-  assert.equal(binding.stableNodeKey(item("b", "Beta")), "backpack:b");
-  assert.equal(binding.keyForNode("backpack:b"), "b");
-  assert.equal(binding.keyForNode("elsewhere:b"), null);
+  assert.equal(binding.stableNodeKey(item("b", "Beta")), "backpack.b");
+  assert.equal(binding.keyForNode("backpack.b"), "b");
+  assert.equal(binding.keyForNode("elsewhere.b"), null);
   store.collection("items").move("a", 1);
-  assert.equal(binding.stableNodeKey(item("b", "Beta")), "backpack:b");
+  assert.equal(binding.stableNodeKey(item("b", "Beta")), "backpack.b");
 });
 
 test("drag and selection payloads carry stable keys", () => {
@@ -55,7 +55,7 @@ test("drag and selection payloads carry stable keys", () => {
   assert.equal(binding.selectedKey(), "gem-1");
   const [, payloadFor, kindFor] = binding.dragSourceSpec();
   const entry = store.collection("items").get("gem-1");
-  assert.deepEqual(payloadFor(entry), { item_id: "gem-1", kind: "gem", source_node_key: "backpack:gem-1", intent: "domain.item.move" });
+  assert.deepEqual(payloadFor(entry), { item_id: "gem-1", kind: "gem", source_node_key: "backpack.gem-1", intent: "domain.item.move" });
   assert.equal(kindFor(entry), "gem");
 });
 
@@ -64,7 +64,7 @@ test("default drag payload and kind", () => {
   const binding = new CollectionBinder(gridCapabilities()).bind("grid", store.collection("items"), { columns, drag: new DragSpec("domain.item.move") });
   const [, payloadFor, kindFor] = binding.dragSourceSpec();
   const entry = store.collection("items").get("a");
-  assert.deepEqual(payloadFor(entry), { item_key: "a", kind: "grid", source_node_key: "grid:a", intent: "domain.item.move" });
+  assert.deepEqual(payloadFor(entry), { item_key: "a", kind: "grid", source_node_key: "grid.a", intent: "domain.item.move" });
   assert.equal(kindFor(entry), "grid");
 });
 

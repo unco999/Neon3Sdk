@@ -2,6 +2,24 @@
 
 All notable changes to the Neon3 language SDKs are recorded in this file.
 
+## 0.1.4 - 2026-09-02
+
+### Added
+
+- Added the generic `NeonApp` application entry point and Store-backed UI flow.
+- Added deterministic Python and Node JSONL probes for cross-process frame pairing
+  and diagnostics: missing, stale, coordinate mismatch, comparison direction,
+  and matched.
+- Added the application migration examples and package export coverage.
+- Runtime latest-release resolution now falls back to the GitHub release-page
+  redirect when the API is rate-limited, and Node latest lookup honors proxies.
+
+### Verification
+
+- Python: 87 tests passed; wheel and sdist passed `twine check`.
+- Node: 72 tests passed; TypeScript build and `npm pack --dry-run` passed.
+- Real runtime v0.2.3 probes passed for both SDKs.
+
 ## 0.1.3 — 2026-09-01
 
 ### Fixed

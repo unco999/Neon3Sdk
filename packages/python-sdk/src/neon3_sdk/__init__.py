@@ -1,6 +1,7 @@
 """Public Python SDK for Neon3's transport-independent control-plane protocol."""
 
 from .client import NeonClient
+from .app import NeonApp, InboundOutcome
 from .calculator import CalculatorDomain, CalculatorServer
 from .capabilities import CapabilitySet, describe_capabilities, required_capabilities_for_flow, scan_flow, validate_flow_source
 from .components import BindingPage, CollectionBinder, CollectionBinding, DragSpec, DropSpec
@@ -90,6 +91,8 @@ __all__ = [
     "PointerEvent",
     "KeyEvent",
     "NeonClient",
+    "NeonApp",
+    "InboundOutcome",
     "NeonError",
     "ObservableStore",
     "ProtocolError",

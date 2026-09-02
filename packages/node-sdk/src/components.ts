@@ -19,6 +19,10 @@ import { CollectionStore, GridCell } from "./store.js";
 
 export const DATA_GRID_WINDOW_CAPABILITY = "ui.data_grid.window.v1";
 
+// Node keys the runtime accepts match [A-Za-z0-9._-] (nui_flow valid_key);
+// the binding row separator must stay inside that set, so it is a dot.
+export const KEY_SEPARATOR = ".";
+
 export type ColumnMapper = (item: any) => Record<string, GridCell>;
 
 function readFlag(store: unknown): boolean {
@@ -28,6 +32,12 @@ function readFlag(store: unknown): boolean {
   if (value && typeof (value as any).get === "function") value = (value as any).get();
   if (value && typeof value === "object" && "value" in (value as object)) value = (value as Record<string, unknown>).value;
   return Boolean(value);
+}
+
+/** Default payload: stable key plus the item's own kind when present. */
+function defaultDragPayload(item: any, key: string, nodeKey: string): Record<string, unknown> {
+  const kind = item !== null && typeof item === "object" && "kind" in item ? String((item as Record<string, unknown>).kind) : nodeKey;
+  return { item_key: key, kind };
 }
 
 export interface DragSpecSpec {
@@ -48,8 +58,8 @@ export class DragSpec {
     }
   }
   payload(item: any, key: string, nodeKey: string): Record<string, unknown> {
-    const base = this.payloadFor ? this.payloadFor(item) : { item_key: key, kind: nodeKey };
-    return { ...base, source_node_key: `${nodeKey}:${key}`, intent: this.intent };
+    const base = this.payloadFor ? this.payloadFor(item) : defaultDragPayload(item, key, nodeKey);
+    return { ...base, source_node_key: `${nodeKey}${KEY_SEPARATOR}${key}`, intent: this.intent };
   }
 }
 
@@ -111,10 +121,10 @@ export class CollectionBinding {
   itemKey(item: any): string { return this.source.keyOf(item); }
 
   /** Fixed rule: binding node key + stable business key, never array index. */
-  stableNodeKey(item: any): string { return `${this.nodeKey}:${this.itemKey(item)}`; }
+  stableNodeKey(item: any): string { return `${this.nodeKey}${KEY_SEPARATOR}${this.itemKey(item)}`; }
 
   keyForNode(nodeKey: string): string | null {
-    const prefix = `${this.nodeKey}:`;
+    const prefix = `${this.nodeKey}${KEY_SEPARATOR}`;
     return nodeKey.startsWith(prefix) ? nodeKey.slice(prefix.length) : null;
   }
 
@@ -156,7 +166,7 @@ export class CollectionBinding {
 
   dragSourceSpec(routerSourceKey?: string): [string, (item: any) => Record<string, unknown>, (item: any) => string] {
     const payload = (item: any): Record<string, unknown> =>
-      this.drag ? this.drag.payload(item, this.itemKey(item), this.nodeKey) : { item_key: this.itemKey(item), kind: this.nodeKey };
+      this.drag ? this.drag.payload(item, this.itemKey(item), this.nodeKey) : { ...defaultDragPayload(item, this.itemKey(item), this.nodeKey), source_node_key: this.stableNodeKey(item) };
     const kindOf = (item: any): string => String(payload(item).kind ?? this.nodeKey);
     return [routerSourceKey ?? this.nodeKey, payload, kindOf];
   }

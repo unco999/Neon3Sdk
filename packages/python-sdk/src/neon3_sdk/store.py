@@ -466,6 +466,20 @@ class ObservableStore:
         self._dirty_selections.clear()
         self.domain_revision += 1
 
+    def mark_scalars_applied(self) -> None:
+        """Confirm only scalar and selection lanes (active ``ui.input.frame``).
+
+        Grid lanes stay dirty because they ride on the next host publication;
+        the domain revision still advances once per confirmed mutation batch.
+        """
+        for name in self._dirty_scalars:
+            self._scalars[name].mark_applied()
+        for name in self._dirty_selections:
+            self._selections[name].mark_applied()
+        self._dirty_scalars.clear()
+        self._dirty_selections.clear()
+        self.domain_revision += 1
+
     def reject_pending(self) -> None:
         """Rejection path: leave local confirm state untouched.
 

@@ -107,12 +107,17 @@ async function download(url: string, destination: string, timeoutMs: number): Pr
 }
 
 async function resolveLatestRuntimeVersion(): Promise<string> {
-  const response = await fetch(`https://api.github.com/repos/${NEON3_RUNTIME_REPOSITORY}/releases/latest`, {
-    headers: { Accept: "application/vnd.github+json", "User-Agent": "@neon3/sdk" },
-    signal: AbortSignal.timeout(30000),
-  });
-  if (!response.ok) throw new Error(`Unable to resolve latest Neon3 runtime release: HTTP ${response.status}`);
-  const release = await response.json() as { tag_name?: unknown };
-  if (typeof release.tag_name !== "string" || release.tag_name.length === 0) throw new Error("GitHub latest Neon3 release has no tag_name");
-  return release.tag_name;
+  const proxy = process.env.HTTPS_PROXY ?? process.env.HTTP_PROXY ?? process.env.https_proxy ?? process.env.http_proxy;
+  const options = { signal: AbortSignal.timeout(30000), ...(proxy ? { dispatcher: new ProxyAgent(proxy) } : {}) } as RequestInit;
+  const response = await fetch(`https://api.github.com/repos/${NEON3_RUNTIME_REPOSITORY}/releases/latest`, { ...options, headers: { Accept: "application/vnd.github+json", "User-Agent": "@neon3/sdk" } } as RequestInit);
+  if (response.ok) {
+    const release = await response.json() as { tag_name?: unknown };
+    if (typeof release.tag_name === "string" && release.tag_name.length > 0) return release.tag_name;
+  }
+  const page = await fetch(`https://github.com/${NEON3_RUNTIME_REPOSITORY}/releases/latest`, { ...options, redirect: "manual" } as RequestInit);
+  const location = page.headers.get("location") ?? "";
+  const marker = "/releases/tag/";
+  const tag = location.includes(marker) ? location.split(marker, 2)[1].split("/", 1)[0] : "";
+  if (!tag) throw new Error(`Unable to resolve latest Neon3 runtime release: API HTTP ${response.status}`);
+  return tag;
 }
