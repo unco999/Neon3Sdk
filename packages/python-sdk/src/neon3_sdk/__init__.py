@@ -42,6 +42,7 @@ from .input import InputClient, KeyEvent
 from .render import Backend, BackendNegotiation, Camera3D, ColorSpace, ExternalSurface, PointerEvent, RenderClient, SurfaceKind, SurfaceOpen, SurfaceSize, SurfaceTarget, WorldInformation, WorldPlacement
 from .runtime import RuntimeConfig, RuntimeEndpoints, RuntimeMode, RuntimeSession, default_neon_root, runtime_version
 from .session import IntentResult, UiSession
+from .store import CollectionStore, ObservableStore, ScalarStore, SelectionStore, typed_value
 from .ui import UiClient, UiProgram
 from .event import EventClient, EventFilter, EventSubscription
 from .wire import CORE_ERROR_CODES, canonical_json, fixture_path, load_fixture
@@ -56,6 +57,7 @@ __all__ = [
     "Camera3D",
     "Backend",
     "BackendNegotiation",
+    "CollectionStore",
     "ColorSpace",
     "ComponentGallery",
     "CORE_ERROR_CODES",
@@ -73,6 +75,7 @@ __all__ = [
     "KeyEvent",
     "NeonClient",
     "NeonError",
+    "ObservableStore",
     "ProtocolError",
     "RemoteError",
     "RenderClient",
@@ -80,7 +83,9 @@ __all__ = [
     "ResolvedInputValue",
     "RevisionState",
     "RpcResponse",
+    "ScalarStore",
     "SemanticInteractionMetadata",
+    "SelectionStore",
     "ServiceDescription",
     "ServiceHealth",
     "StaleRevisionError",
@@ -110,6 +115,7 @@ __all__ = [
     "required_capabilities_for_flow",
     "runtime_version",
     "scan_flow",
+    "typed_value",
     "validate_flow_source",
     "EventClient",
     "EventFilter",
