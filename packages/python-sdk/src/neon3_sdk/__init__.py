@@ -1,6 +1,7 @@
 """Public Python SDK for Neon3's transport-independent control-plane protocol."""
 
 from .client import NeonClient
+from .android import AndroidConfig, AndroidSession
 from .app import NeonApp, InboundOutcome
 from .calculator import CalculatorDomain, CalculatorServer
 from .capabilities import CapabilitySet, describe_capabilities, required_capabilities_for_flow, scan_flow, validate_flow_source
@@ -62,6 +63,8 @@ __all__ = [
     "CalculatorDomain",
     "CalculatorServer",
     "Camera3D",
+    "AndroidConfig",
+    "AndroidSession",
     "Backend",
     "BackendNegotiation",
     "CollectionBinding",

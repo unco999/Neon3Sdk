@@ -11,3 +11,8 @@ Thumbs.db
 .cache/
 release/
 **/*.egg-info/
+
+# 本地 PyPI 认证，绝不能提交
+.pypirc
+# 工作日志
+/docs/ai-diary/

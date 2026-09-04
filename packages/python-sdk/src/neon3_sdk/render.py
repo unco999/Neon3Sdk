@@ -175,11 +175,23 @@ class PointerEvent:
 
 
 class RenderClient:
-    """High-level wrapper for the WGPU runtime control-plane contract."""
+    """High-level wrapper for the WGPU runtime control-plane contract.
 
-    def __init__(self, client: NeonClient, target: str = "wgpu-runtime") -> None:
+    ``external_client`` is an optional client that identifies as an external
+    GPU host. ``render.surface.open/acquire/frame/capture_png`` require the
+    ``external_host`` client kind, so callers that share one ``NeonClient``
+    (e.g. an app hosted by a native engine) pass a dedicated host client
+    here. When omitted, surface calls fall back to ``client``.
+    """
+
+    def __init__(self, client: NeonClient, target: str = "wgpu-runtime", external_client: NeonClient | None = None) -> None:
         self.client = client
         self.target = target
+        self.external_client = external_client
+
+    @property
+    def surface_client(self) -> NeonClient:
+        return self.external_client or self.client
 
     def diagnostics(self) -> Any:
         return self.client.call(self.target, "wgpu.render.diagnostics").result
@@ -204,7 +216,7 @@ class RenderClient:
         return self.client.call(self.target, "ui.host.pointer_event", {"event": event.to_wire()}).result
 
     def open_surface(self, surface: SurfaceOpen) -> "ExternalSurface":
-        result = self.client.call(self.target, "render.surface.open", surface.to_wire(), idempotency_key=f"surface-open:{surface.surface_id}").result
+        result = self.surface_client.call(self.target, "render.surface.open", surface.to_wire(), idempotency_key=f"surface-open:{surface.surface_id}").result
         if not isinstance(result, dict):
             raise ProtocolError("render.surface.open returned a non-object result")
         return ExternalSurface(self, surface, result)
@@ -223,10 +235,23 @@ class ExternalSurface:
         return int(self.descriptor["generation"])
 
     def acquire(self, pid: int) -> Any:
-        return self.renderer.client.call(self.renderer.target, "render.surface.acquire", {"surface_id": self.request.surface_id, "pid": pid}).result
+        return self.renderer.surface_client.call(self.renderer.target, "render.surface.acquire", {"surface_id": self.request.surface_id, "pid": pid}).result
 
     def acquire_current_process(self) -> Any:
         return self.acquire(os.getpid())
 
     def frame(self) -> Any:
-        return self.renderer.client.call(self.renderer.target, "render.surface.frame", {"surface_id": self.request.surface_id}).result
+        return self.renderer.surface_client.call(self.renderer.target, "render.surface.frame", {"surface_id": self.request.surface_id}).result
+
+    def save_png(self, path: str) -> Any:
+        """Save the latest completed frame of this shared surface to a PNG file.
+
+        The wgpu runtime readbacks the surface texture and writes the artifact;
+        native handles are never exposed over the protocol. Raises with
+        ``backend_not_available`` on hosts without a GPU surface export path.
+        """
+        return self.renderer.surface_client.call(
+            self.renderer.target,
+            "render.surface.capture_png",
+            {"surface_id": self.request.surface_id, "path": path},
+        ).result

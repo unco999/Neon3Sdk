@@ -36,8 +36,9 @@ class NeonClient:
         kind: str = "cli",
         instance_id: str | None = None,
         timeout_seconds: float = 5.0,
+        allow_non_loopback: bool = False,
     ) -> "NeonClient":
-        host, port = _parse_loopback_endpoint(endpoint)
+        host, port = _parse_loopback_endpoint(endpoint, allow_non_loopback)
         return cls(
             endpoint=(host, port),
             identity=ClientIdentity(kind, instance_id or str(uuid.uuid4()), os.getpid(), origin),
@@ -113,7 +114,7 @@ class NeonClient:
             raise ProtocolError(str(error)) from error
 
 
-def _parse_loopback_endpoint(endpoint: str | tuple[str, int]) -> tuple[str, int]:
+def _parse_loopback_endpoint(endpoint: str | tuple[str, int], allow_non_loopback: bool = False) -> tuple[str, int]:
     if isinstance(endpoint, tuple):
         host, port = endpoint
     else:
@@ -125,7 +126,7 @@ def _parse_loopback_endpoint(endpoint: str | tuple[str, int]) -> tuple[str, int]
         address = socket.gethostbyname(host)
     except OSError as error:
         raise ValueError(f"endpoint host cannot be resolved: {host}") from error
-    if not address.startswith("127.") and address != "::1":
+    if not allow_non_loopback and not address.startswith("127.") and address != "::1":
         raise ValueError("endpoint must resolve to loopback")
     if not 0 < port < 65536:
         raise ValueError("endpoint port must be between 1 and 65535")

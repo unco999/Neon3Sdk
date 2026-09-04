@@ -5,6 +5,7 @@ import { EventClient } from "./event.js";
 import { NeonClient } from "./client.js";
 import { RenderClient } from "./render.js";
 import { RuntimeConfig, RuntimeSession } from "./runtime.js";
+import { AndroidConfig, AndroidSession } from "./android.js";
 import { IntentRouter } from "./routing.js";
 import { UiSession } from "./session.js";
 import { ObservableStore } from "./store.js";
@@ -33,6 +34,7 @@ export class NeonApp {
   readonly origin: string;
   store: ObservableStore | null;
   runtime: RuntimeSession | null = null;
+  android: AndroidSession | null = null;
   client: NeonClient | any;
   render: RenderClient | null = null;
   events: EventClient | null = null;
@@ -47,10 +49,28 @@ export class NeonApp {
     this.ui = new NeonAppUi(this, session);
   }
 
-  static async start(options: RuntimeConfig & { origin?: string; store?: ObservableStore; external?: boolean } = {}): Promise<NeonApp> {
-    const { origin = "neon3-app", store, external = false, ...runtimeOptions } = options;
+  static async start(options: RuntimeConfig & { origin?: string; store?: ObservableStore; external?: boolean; transport?: "loopback" | "android"; android?: AndroidConfig } = {}): Promise<NeonApp> {
+    const { origin = "neon3-app", store, external = false, transport = "loopback", android: androidConfig, ...runtimeOptions } = options;
     const config: RuntimeConfig = runtimeOptions;
     const app = new NeonApp(config, origin, store, undefined, external);
+    if (transport === "android") {
+      // The Android host runs inside an APK foreground service. No local
+      // runtime processes are spawned; the SDK connects to the device through
+      // adb forward (or a direct device IP) and talks to the single headless
+      // endpoint as if it were both ui-runtime and wgpu-runtime.
+      const session = new AndroidSession(androidConfig ?? {});
+      await session.start();
+      app.android = session;
+      try {
+        app.client = new NeonClient(session.endpoint, { origin, kind: "app_host", allowNonLoopback: true });
+        app.render = new RenderClient(new NeonClient(session.endpoint, { origin, kind: "app_host", allowNonLoopback: true }));
+        // The single Android endpoint answers service.health/describe, ui.*,
+        // and wgpu.*; there is no separate eventd stream.
+        app.events = null;
+        (app.ui as any).session.ui = new UiClient(app.client, "wgpu-runtime");
+        return app;
+      } catch (error) { await app.stop(); throw error; }
+    }
     if (!external) { app.runtime = new RuntimeSession(config); await app.runtime.start(); }
     try {
       app.client = new NeonClient(config.ui ?? "127.0.0.1:39102", { origin, kind: "app_host" });
@@ -105,5 +125,5 @@ export class NeonApp {
       return { response: { request_id: event.request_id ?? eventId, status: "rejected", revision: null, result: null, snapshot: null, error: { code: error.code ?? "domain_rejected", message: error.message } }, error };
     }
   }
-  async stop(): Promise<void> { if (this.runtime) { await this.runtime.stop(); this.runtime = null; } }
+  async stop(): Promise<void> { if (this.runtime) { await this.runtime.stop(); this.runtime = null; } if (this.android) { await this.android.stop(); this.android = null; } }
 }

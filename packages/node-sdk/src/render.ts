@@ -125,7 +125,20 @@ export interface BackendNegotiation {
 }
 
 export class RenderClient {
-  constructor(readonly client: NeonClient, readonly target = "wgpu-runtime") {}
+  /**
+   * @param client control-plane client (service.* / wgpu.* / debug.*)
+   * @param target service name, defaults to wgpu-runtime
+   * @param externalClient optional client that identifies as an external GPU
+   *   host. `render.surface.open/acquire/frame/capture_png` require the
+   *   `external_host` client kind, so callers that share one `NeonClient`
+   *   (e.g. an app hosted by a native engine) pass a dedicated host client
+   *   here. When omitted, surface calls fall back to `client`.
+   */
+  constructor(readonly client: NeonClient, readonly target = "wgpu-runtime", readonly externalClient?: NeonClient) {}
+
+  get surfaceClient(): NeonClient {
+    return this.externalClient ?? this.client;
+  }
 
   async diagnostics(): Promise<unknown> { return (await this.client.call(this.target, "wgpu.render.diagnostics")).result; }
   async graphSnapshot(): Promise<unknown> { return (await this.client.call(this.target, "wgpu.render.graph.snapshot")).result; }
@@ -184,7 +197,7 @@ export class RenderClient {
   async openSurface(open: SurfaceOpen): Promise<ExternalSurface> {
     if (open.kind === "world_ui" && !open.placement) throw new Error("world-ui surfaces require placement");
     if (open.bufferCount !== undefined && ![1, 2, 3].includes(open.bufferCount)) throw new Error("buffer_count must be between 1 and 3");
-    const result = await this.client.call<SurfaceDescriptor>(this.target, "render.surface.open", {
+    const result = await this.surfaceClient.call<SurfaceDescriptor>(this.target, "render.surface.open", {
       session_id: open.sessionId,
       surface_id: open.surfaceId,
       kind: open.kind,
@@ -219,10 +232,23 @@ export class ExternalSurface {
   }
 
   async acquire(pid = process.pid): Promise<unknown> {
-    return (await this.renderer.client.call(this.renderer.target, "render.surface.acquire", { surface_id: this.surfaceId, pid })).result;
+    return (await this.renderer.surfaceClient.call(this.renderer.target, "render.surface.acquire", { surface_id: this.surfaceId, pid })).result;
   }
 
   async frame(): Promise<FrameDescriptor | null> {
-    return (await this.renderer.client.call<FrameDescriptor | null>(this.renderer.target, "render.surface.frame", { surface_id: this.surfaceId })).result;
+    return (await this.renderer.surfaceClient.call<FrameDescriptor | null>(this.renderer.target, "render.surface.frame", { surface_id: this.surfaceId })).result;
+  }
+
+  /**
+   * Save the latest completed frame of this shared surface to a PNG file.
+   * The wgpu runtime readbacks the surface texture and writes the artifact;
+   * never exposes native handles over the protocol. Throws with
+   * `backend_not_available` on hosts without a GPU surface export path.
+   */
+  async savePng(path: string): Promise<unknown> {
+    return (await this.renderer.surfaceClient.call(this.renderer.target, "render.surface.capture_png", {
+      surface_id: this.surfaceId,
+      path,
+    })).result;
   }
 }

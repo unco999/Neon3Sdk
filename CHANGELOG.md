@@ -2,6 +2,48 @@
 
 All notable changes to the Neon3 language SDKs are recorded in this file.
 
+## 0.1.5 - 2026-09-04
+
+Android transport and cross-platform shared surface textures
+(see the Unreleased notes below).
+
+### Added
+
+- **Android transport**: `NeonClient` now accepts `allowNonLoopback` and the
+  new `AndroidSession` locates an adb device, establishes
+  `adb forward tcp:43100 tcp:43100` (or a direct device IP), waits for the
+  Neon3 Android Host health, and shuts it down cleanly on stop.
+- `NeonApp.start({ transport: "android", android: {...} })` (Node) and
+  `NeonApp.start(transport="android", android=...)` (Python) connect to the
+  Android Host's single headless endpoint as if it were both ui-runtime and
+  wgpu-runtime; no local desktop processes are spawned, and `UiClient`
+  targets `wgpu-runtime` for capability alignment.
+- **Cross-platform shared surface textures**: `RenderClient.openSurface`
+  (Node) / `open_surface` (Python) now accept an `external_client` that
+  identifies as an external GPU host, and `ExternalSurface.savePng(path)` /
+  `save_png(path)` save the latest completed frame of the shared surface to a
+  PNG file through `render.surface.capture_png` (added to the wgpu runtime).
+  The API is identical on Windows (D3D12 shared texture) and Android; hosts
+  without a GPU export path answer `backend_not_available` instead of
+  `unsupported_method`.
+
+### Verification
+
+- Python: 92 tests passed (including real emulator Android lifecycle, a
+  Windows DX12 surface-to-PNG integration test, and Android surface PNG).
+- Node: 77 tests passed with both integration gates enabled (Android + surface
+  PNG); 76 pass in default mode with Android integration gated behind
+  NEON3_ANDROID_INTEGRATION=1.
+- Windows headless external GPU server probe: `ui.flow.submit` ->
+  `render.surface.open` (d3d12_shared_texture_v1) -> `render.surface.capture_png`
+  -> valid 704-byte PNG artifact.
+- **Android**: the Host now runs the GPU-backed headless server
+  (`spawn_headless_external_server`) instead of the no-GPU protocol server, so
+  `render.surface.open` -> `render.surface.capture_png` produce a real PNG on
+  the device (967-byte artifact pulled and verified). SwiftShader's
+  `VK_EXT_debug_utils` crash is avoided via minimal instance flags, and
+  non-DX12 surfaces get `TEXTURE_BINDING` so capture readback sampling works.
+
 ## 0.1.4 - 2026-09-02
 
 ### Added

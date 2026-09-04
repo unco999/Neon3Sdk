@@ -39,6 +39,7 @@ from typing import Any, Callable
 
 from .capabilities import CapabilitySet, describe_capabilities
 from .client import NeonClient
+from .android import AndroidConfig, AndroidSession
 from .errors import NeonError
 from .event import EventClient
 from .models import RpcResponse, ServiceDescription
@@ -272,6 +273,7 @@ class NeonApp:
         if service_name:
             self.service_name = service_name
         self.runtime: RuntimeSession | None = None
+        self.android: AndroidSession | None = None
         self.client: NeonClient | Any | None = None
         self.render: RenderClient | None = None
         self.events: EventClient | None = None
@@ -302,8 +304,18 @@ class NeonApp:
         store: ObservableStore | None = None,
         service_name: str | None = None,
         timeout_seconds: float | None = None,
+        transport: str = "loopback",
+        android: AndroidConfig | None = None,
     ) -> "NeonApp":
-        """Launch (or attach to) the runtime and return a live app."""
+        """Launch (or attach to) the runtime and return a live app.
+
+        ``transport="android"`` connects to a Neon3 Android Host inside an
+        APK foreground service through adb forward (or a direct device IP)
+        instead of starting local desktop processes. All three clients then
+        share the single headless endpoint; ``UiClient`` targets
+        ``wgpu-runtime`` because the Android host answers ``ui.*`` and
+        ``wgpu.*`` on one socket.
+        """
         runtime_mode = RuntimeMode(mode)
         base = RuntimeConfig()
         config = RuntimeConfig(
@@ -315,6 +327,19 @@ class NeonApp:
             timeout_seconds=timeout_seconds if timeout_seconds is not None else base.timeout_seconds,
         )
         app = cls(config=config, mode=runtime_mode, origin=origin, external=external, store=store, service_name=service_name)
+        if transport == "android":
+            session = AndroidSession(android or AndroidConfig())
+            session.start()
+            app.android = session
+            try:
+                app._boot_android()
+            except Exception:
+                try:
+                    session.stop()
+                finally:
+                    app.android = None
+                raise
+            return app
         app._boot()
         return app
 
@@ -343,6 +368,26 @@ class NeonApp:
         if program is not None:
             app.adopt_program(UiProgram.from_submission(program), synchronize=False)
         return app
+
+    def _boot_android(self) -> None:
+        """Connect all clients to the single Android headless endpoint.
+
+        The Android host has no separate eventd stream, so ``events`` stays
+        None; domain semantics stay in the SDK (the SDK is the business host).
+        """
+        assert self.android is not None
+        self.client = NeonClient.connect(
+            self.android.endpoint,
+            origin=self.origin,
+            kind="cli",
+            allow_non_loopback=True,
+        )
+        self.render = RenderClient(
+            NeonClient.connect(self.android.endpoint, origin=self.origin, kind="cli", allow_non_loopback=True)
+        )
+        self.events = None
+        self._session = UiSession(UiClient(self.client, target="wgpu-runtime"))
+        self.ui = _AppUi(self, self._session)
 
     def _boot(self) -> None:
         if not self.external:
@@ -649,6 +694,11 @@ class NeonApp:
         if self.runtime is not None:
             self.runtime.stop()
             self.runtime = None
+        if self.android is not None:
+            try:
+                self.android.stop()
+            finally:
+                self.android = None
 
     def __enter__(self) -> "NeonApp":
         return self

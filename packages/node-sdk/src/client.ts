@@ -8,17 +8,23 @@ export interface ClientOptions {
   instanceId?: string;
   timeoutMs?: number;
   maxFrameSize?: number;
+  /**
+   * Allow non-loopback endpoints. Defaults to false; desktop and adb-forward
+   * transports stay loopback. Set true only when connecting to a device IP
+   * directly (Android transport without adb forward).
+   */
+  allowNonLoopback?: boolean;
 }
 
 const DEFAULT_MAX_FRAME_SIZE = 128 * 1024 * 1024;
 
-function parseEndpoint(endpoint: string): { host: string; port: number } {
+function parseEndpoint(endpoint: string, allowNonLoopback = false): { host: string; port: number } {
   const split = endpoint.match(/^([^:]+):(\d+)$/);
   if (!split) throw new TypeError("endpoint must be host:port");
   const host = split[1];
   const port = Number(split[2]);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new TypeError("endpoint port must be between 1 and 65535");
-  if (!host.startsWith("127.") && host !== "localhost" && host !== "::1") throw new TypeError("endpoint must be loopback");
+  if (!allowNonLoopback && !host.startsWith("127.") && host !== "localhost" && host !== "::1") throw new TypeError("endpoint must be loopback");
   return { host, port };
 }
 
@@ -28,7 +34,8 @@ export class NeonClient {
   readonly options: Required<ClientOptions>;
 
   constructor(endpoint: string, options: ClientOptions = {}) {
-    ({ host: this.host, port: this.port } = parseEndpoint(endpoint));
+    const allowNonLoopback = options.allowNonLoopback ?? false;
+    ({ host: this.host, port: this.port } = parseEndpoint(endpoint, allowNonLoopback));
     const timeoutMs = options.timeoutMs ?? 5000;
     if (!(timeoutMs > 0)) throw new TypeError("timeoutMs must be positive");
     const maxFrameSize = options.maxFrameSize ?? DEFAULT_MAX_FRAME_SIZE;
@@ -43,6 +50,7 @@ export class NeonClient {
       instanceId: options.instanceId ?? crypto.randomUUID(),
       timeoutMs,
       maxFrameSize,
+      allowNonLoopback: options.allowNonLoopback ?? false,
     };
   }
 
