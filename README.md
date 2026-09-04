@@ -19,8 +19,8 @@
 | Python | `python -m pip install --upgrade neon3-sdk` | [PyPI: neon3-sdk](https://pypi.org/project/neon3-sdk/) | `0.1.5` |
 | Node.js / TypeScript | `npm install @neon3/sdk` | [npm: @neon3/sdk](https://www.npmjs.com/package/@neon3/sdk) | `0.1.5` |
 | Rust | `cargo add neon3-sdk` | [crates.io: neon3-sdk](https://crates.io/crates/neon3-sdk) | `0.1.0` |
-| C | 链接 `neon3_c`（DLL/静态库） | [C SDK](../c-sdk/) | `0.1.0` |
-| C++ | 链接 `neon3_c` + `#include <neon3.hpp>` | [C++ SDK](../cpp-sdk/) | `0.1.0` |
+| C | 链接 `neon3_c`（DLL/静态库） | [GitHub Release v0.1.0](https://github.com/unco999/Neon3Sdk/releases/tag/v0.1.0) | `0.1.0` |
+| C++ | 链接 `neon3_c` + `#include <neon3.hpp>` | [GitHub Release v0.1.0](https://github.com/unco999/Neon3Sdk/releases/tag/v0.1.0) | `0.1.0` |
 
 Python 与 Node.js SDK 默认解析并下载 [Neon3 Runtime Releases](https://github.com/unco999/Neon3-CiJian/releases) 的最新版本。只有复现问题时才设置 `NEON3_RUNTIME_VERSION`。
 
@@ -39,8 +39,8 @@ $env:NEON3_RUNTIME_VERSION = "vX.Y.Z"
 | Python | 已发布 | [PyPI](https://pypi.org/project/neon3-sdk/) |
 | Node.js / TypeScript | 已发布 | [npm](https://www.npmjs.com/package/@neon3/sdk) |
 | Rust | 已发布 | [crates.io](https://crates.io/crates/neon3-sdk) |
-| C | 已发布 | C ABI / DLL（`packages/c-sdk`，`neon3.h`） |
-| C++ | 已发布 | C++ SDK（`packages/cpp-sdk`，header-only `neon3.hpp`） |
+| C | 已发布 | [GitHub Release v0.1.0](https://github.com/unco999/Neon3Sdk/releases/tag/v0.1.0) · `neon3.h` |
+| C++ | 已发布 | [GitHub Release v0.1.0](https://github.com/unco999/Neon3Sdk/releases/tag/v0.1.0) · `neon3.hpp` |
 | C | 开发中 | C ABI / DLL：开发中 |
 | C++ | 开发中 | C++ SDK / DLL：开发中 |
 | C# / .NET | 规划中 | NuGet：规划中 |
