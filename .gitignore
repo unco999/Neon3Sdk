@@ -11,6 +11,7 @@ Thumbs.db
 .cache/
 release/
 **/*.egg-info/
+packages/*/target/
 
 # 本地 PyPI 认证，绝不能提交
 .pypirc
