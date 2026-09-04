@@ -2,6 +2,38 @@
 
 All notable changes to the Neon3 language SDKs are recorded in this file.
 
+## Unreleased - Rust SDK
+
+### Added
+
+- **Rust SDK** (`packages/rust-sdk`, crate `neon3-sdk`): the third language
+  SDK talking the same `neon3.rpc` wire contract (4-byte big-endian length
+  prefix + UTF-8 JSON) over loopback TCP.
+  - `wire`: canonical envelope types + framing with big-endian length prefix,
+    request/response parsing, stable error mapping (`RpcFailure`).
+  - `NeonClient`: framed RPC, loopback-only security posture by default
+    (`allow_non_loopback` opt-in for direct device IPs), `health`/`describe`.
+  - `UiSession`: `mount_flow`, `dispatch_intent` (`ui.host.inbound`), and
+    `publish` (`ui.input.frame`) with input-revision bookkeeping and stale
+    refresh/retry.
+  - `RenderClient`: `open_surface` + `save_surface_png`
+    (`render.surface.capture_png`) + `acquire_surface`; `shutdown`.
+  - `AndroidSession`: adb discovery, `adb forward`, health wait, clean
+    `service.shutdown` + forward cleanup.
+  - `sdk_probe` binary: end-to-end probe
+    (health -> ui.flow.submit -> ui.host.inbound -> openSurface -> savePng ->
+    shutdown).
+
+### Verification
+
+- `cargo test`: 5 unit tests passed (framing round-trip, frame-too-large,
+  response ok/fail, loopback policy, localhost connect).
+- End-to-end probe against the Windows headless GPU server:
+  health=healthy, ui.flow.submit(surface_id=example),
+  ui.host.inbound(status=accepted, input_revision=1),
+  render.surface.open(generation=1),
+  render.surface.capture_png -> valid 7906-byte PNG (89 50 4E 47 header).
+
 ## 0.1.5 - 2026-09-04
 
 Android transport and cross-platform shared surface textures
