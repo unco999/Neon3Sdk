@@ -12,6 +12,8 @@ Thumbs.db
 release/
 **/*.egg-info/
 packages/*/target/
+# 本地发布暂存（DLL/zip），不需要进入仓库
+packages/dist/
 
 # 本地 PyPI 认证，绝不能提交
 .pypirc
