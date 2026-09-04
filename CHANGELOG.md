@@ -34,6 +34,31 @@ All notable changes to the Neon3 language SDKs are recorded in this file.
   render.surface.open(generation=1),
   render.surface.capture_png -> valid 7906-byte PNG (89 50 4E 47 header).
 
+## Unreleased - C/C++ SDK
+
+### Added
+
+- **C SDK** (`packages/c-sdk`, library `neon3_c`): C ABI over the Rust core.
+  - `include/neon3.h`: stable C interface (opaque handle, fixed error codes,
+    string ownership rules).
+  - `neon3_client_new/free`, `neon3_client_call`, `neon3_client_health`,
+    `neon3_ui_mount_flow`, `neon3_surface_open`, `neon3_surface_save_png`,
+    `neon3_client_shutdown`, `neon3_free_string`.
+  - Thread-safe opaque handle (mutex-guarded), direct wire calls.
+  - `cabi_e2e` integration test loads the cdylib and drives
+    health -> mount_flow -> open_surface -> save_png -> shutdown against a
+    real headless GPU server, asserting a valid PNG artifact.
+- **C++ SDK** (`packages/cpp-sdk`): header-only RAII wrapper (`neon3.hpp`)
+  over the C ABI: `neon3::Client` with `health`, `call`, `mountFlow`,
+  `openSurface`, `savePng`, `shutdown`, plus `neon3::Error`.
+  - `tests/smoke.cpp` compiles cleanly with clang++ (`-fsyntax-only`).
+
+### Verification
+
+- `cargo test -p neon3-c --test cabi_e2e`: 1 passed (real end-to-end, valid
+  PNG artifact produced).
+- C++ header validated with NDK clang++ `-fsyntax-only` (exit 0).
+
 ## 0.1.5 - 2026-09-04
 
 Android transport and cross-platform shared surface textures

@@ -1,0 +1,19 @@
+[package]
+name = "neon3-c"
+version = "0.1.0"
+edition = "2021"
+description = "C ABI client library for the Neon3 control-plane protocol"
+repository = "https://github.com/unco999/Neon3Sdk"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+
+[lib]
+name = "neon3_c"
+crate-type = ["cdylib", "staticlib", "lib"]
+
+[dev-dependencies]
+libloading = "0.8"
+
+[dependencies]
+neon3-sdk = { path = "../rust-sdk" }
+serde_json = "1"
