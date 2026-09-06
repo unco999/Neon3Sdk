@@ -88,6 +88,19 @@ export class NeonApp {
   get session(): UiSession { return this.ui.session; }
   async mountFlow(source: string, options: { validate?: boolean; idempotencyKey?: string } = {}): Promise<UiProgram> { return this.session.mountFlow(source, options); }
   async mountFlowFile(path: string, options: { validate?: boolean; idempotencyKey?: string } = {}): Promise<UiProgram> { return this.mountFlow(await readFile(path, "utf8"), options); }
+  /**
+   * Register a custom-shader material package before mounting a Flow that
+   * references it. Accepts either a fully-built `ShaderPackage` (with digest)
+   * or a source spec whose WGSL text is uploaded as a UTF-8 byte array.
+   */
+  async registerShader(pkg: import("./render.js").ShaderPackage): Promise<unknown> {
+    if (!this.render) throw new Error("render client is unavailable");
+    return this.render.registerShader(pkg);
+  }
+  async shaderState(): Promise<unknown> {
+    if (!this.render) throw new Error("render client is unavailable");
+    return this.render.shaderState();
+  }
   intent(name: string): (handler: any) => any { return this.router.on(name) as (handler: any) => any; }
   async bind(nodeKey: string, source: any, options: any = {}): Promise<any> {
     const { fallback = "list", ...bindingOptions } = options;

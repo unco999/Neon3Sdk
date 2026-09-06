@@ -39,6 +39,36 @@ export interface SurfaceTarget {
   format: string;
 }
 
+/** Bounded custom-shader material package. Mirrors `UiShaderPackage`. */
+export interface ShaderParameter {
+  key: string;
+  kind: "f32" | "vec2" | "vec4" | "color";
+  default_value?: unknown;
+  range?: [number, number];
+}
+
+export interface ShaderPackage {
+  package_id: string;
+  version: number;
+  /** FNV-1a 64-bit hex fingerprint of `source_bytes`; see shaderSourceDigest. */
+  source_digest: string;
+  /** WGSL source as a byte array (bounded; JSON-safe array). */
+  source_bytes: number[];
+  entry_point: string;
+  fallback: string;
+  parameters: ShaderParameter[];
+}
+
+/** Deterministic FNV-1a 64-bit fingerprint (hex) matching the runtime. */
+export function shaderSourceDigest(bytes: Uint8Array | number[]): string {
+  let big = 0xcbf29ce484222325n;
+  for (const byte of bytes) {
+    big ^= BigInt(byte);
+    big = (big * 0x100000001b3n) & 0xffffffffffffffffn;
+  }
+  return big.toString(16).padStart(16, "0");
+}
+
 export interface SurfaceOpen {
   sessionId: string;
   surfaceId: string;
@@ -142,6 +172,20 @@ export class RenderClient {
 
   async diagnostics(): Promise<unknown> { return (await this.client.call(this.target, "wgpu.render.diagnostics")).result; }
   async graphSnapshot(): Promise<unknown> { return (await this.client.call(this.target, "wgpu.render.graph.snapshot")).result; }
+
+  /**
+   * Register a validated custom-shader material package (`UiShaderPackage`).
+   * The runtime re-computes the digest, enforces the source budget, and caches
+   * the package for later material binding. See `shaderSourceDigest`.
+   */
+  async registerShader(pkg: ShaderPackage): Promise<unknown> {
+    return (await this.client.call(this.target, "wgpu.shader.register", { package: pkg })).result;
+  }
+
+  /** Structured snapshot of every registered shader package. */
+  async shaderState(): Promise<unknown> {
+    return (await this.client.call(this.target, "wgpu.shader.state")).result;
+  }
 
   async negotiateBackend(negotiation: BackendNegotiation): Promise<unknown> {
     return (await this.client.call(this.target, "render.backend.negotiate", {
