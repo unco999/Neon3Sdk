@@ -6,12 +6,17 @@
 
 pub mod android;
 pub mod client;
+pub mod constants;
+pub mod error;
+pub mod event;
+pub mod facade;
 pub mod render;
 pub mod session;
 pub mod wire;
 
 pub use android::{ANDROID_HOST_ENDPOINT, ANDROID_HOST_PORT, AndroidConfig, AndroidSession, AndroidSessionHandle};
 pub use client::{ClientOptions, NeonClient};
+pub use event::{EventClient, EventEnvelope, EventSubscription, ShaderEvent};
 pub use render::{ExternalSurface, RenderClient, SurfaceKind, SurfaceOpen, SurfaceSize};
 pub use session::{IntentResult, PublishResult, UiProgram, UiProgramRevision, UiSession, UiTarget};
 pub use wire::{ClientIdentity, RpcError, RpcFailure, RpcRequest, RpcResponse, Version};

@@ -2,6 +2,60 @@
 
 All notable changes to the Neon3 language SDKs are recorded in this file.
 
+## 0.1.6 - Unreleased (2026-09-15)
+
+Aligns all five language SDKs with Neon3-CiJian **v0.2.10** runtime.
+
+### Added
+
+- **Three new wire interfaces** (verified line-by-line against v0.2.10 source):
+  - `shader.event` eventd event (v0.2.7): WGSL `emit_shader_event(event_id, payload)`
+    delivers `{event_id: u32, payload: [f32; 4]}` to eventd.
+  - `wgpu.ui.set_view_extras` RPC (v0.2.7): upload 10 rows of vec4 to the
+    shader's `view.extras[0..9]` uniform. SDK validates 1..=10 rows and pads
+    to 10 automatically.
+  - `wgpu.ui.animation.{pause,resume,seek,cancel}` RPC (v0.2.10): renderer-owned
+    animation timeline control. SDK auto-generates the required envelope-level
+    `idempotency_key`; `seek` validates `progress` in [0,1] locally.
+
+- **Constants & enums layer** (replaces bare string literals):
+  - Rust: `constants.rs` with `service`/`method`/`event_name` modules and
+    `SurfaceKind`/`AnimationAction` enums.
+  - Python: `constants.py` with `service`/`method`/`event_name` classes and
+    `SurfaceKind`/`AnimationAction(str, Enum)`.
+  - Node: `constants.ts` with `service`/`method`/`eventName` as const objects
+    and `AnimationAction` const object.
+  - C/C++: `#define NEON3_SERVICE_*` / `NEON3_METHOD_*` / `NEON3_EVENT_*` macros
+    in `neon3.h`.
+
+- **React-hooks-style facade** (Python + Node + Rust builder):
+  - Python: `from neon3_sdk import start, mount, state, on` — context-manager
+    based, auto-publish on `state.value = x`, `@on("intent")` decorator.
+  - Node: `import { start, mount, state, on } from "@neon3/sdk"` — async
+    version of the same API.
+  - Rust: `facade::App::connect(endpoint, origin)` with builder-style
+    `mount()`/`state()`/`on()`/`view_extras()`/`anim()` methods.
+  - Sub-namespaces: `app.shader.on(event_id)`, `app.renderer.view_extras(...)`
+    (60 Hz throttled), `app.anim.pause/resume/seek/cancel`.
+
+- **C SDK event subscription ABI**: `neon3_event_subscribe` / `neon3_event_recv` /
+  `neon3_event_subscription_free` — opaque handle wrapping the Rust `EventClient`.
+
+### Changed
+
+- `sdk-wire-contract.md` source_runtime bumped from v0.2.x to v0.2.10
+  (commit f1af66f), new section 9 documenting the three new wire interfaces.
+
+### Verification
+
+- Rust: `cargo test` 8 passed (7 unit + 1 doc).
+- Python: `unittest` 105 passed, 2 skipped (was 94; +11 facade tests).
+- Node: `tsc --noEmit` exit 0, `npm test` 78 pass / 3 skip / 0 fail.
+- C: `cargo test -p neon3-c` 1 passed.
+- C++: header syntax matches existing wrappers (no local compiler; needs CI).
+
+---
+
 ## Unreleased - Rust SDK
 
 ### Added

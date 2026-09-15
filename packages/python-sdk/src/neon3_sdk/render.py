@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .client import NeonClient
+from .constants import AnimationAction, method as rpc_method
 from .errors import ProtocolError
 
 
@@ -220,6 +221,62 @@ class RenderClient:
         if not isinstance(result, dict):
             raise ProtocolError("render.surface.open returned a non-object result")
         return ExternalSurface(self, surface, result)
+
+    def set_view_extras(self, extras):
+        """Upload 10 groups of vec4 to the shader's ``view.extras[0..9]`` uniform.
+
+        ``extras`` may have 1..=10 rows; missing rows are zero-padded to 10.
+        RPC: ``wgpu.ui.set_view_extras`` (v0.2.7).
+        """
+        if not 1 <= len(extras) <= 10:
+            raise ValueError(f"extras must have 1..=10 rows, got {len(extras)}")
+        padded = []
+        for row in extras:
+            if len(row) != 4:
+                raise ValueError(f"each extras row must have 4 components, got {len(row)}")
+            for v in row:
+                if not math.isfinite(v):
+                    raise ValueError("view extras must contain only finite f32 values")
+            padded.append(list(row))
+        while len(padded) < 10:
+            padded.append([0.0, 0.0, 0.0, 0.0])
+        return self.client.call(
+            self.target,
+            rpc_method.WGPU_UI_SET_VIEW_EXTRAS,
+            {"extras": padded},
+        ).result
+
+    def animation_pause(self, node_path):
+        """Pause a renderer-owned animation timeline (v0.2.10)."""
+        return self._animation_control(AnimationAction.PAUSE, node_path, None)
+
+    def animation_resume(self, node_path):
+        """Resume a paused animation timeline (v0.2.10)."""
+        return self._animation_control(AnimationAction.RESUME, node_path, None)
+
+    def animation_cancel(self, node_path):
+        """Cancel an animation timeline (v0.2.10)."""
+        return self._animation_control(AnimationAction.CANCEL, node_path, None)
+
+    def animation_seek(self, node_path, progress):
+        """Seek an animation timeline to ``progress`` in [0, 1] (v0.2.10)."""
+        if not math.isfinite(progress) or not 0.0 <= progress <= 1.0:
+            raise ValueError(f"animation progress must be finite in [0, 1], got {progress}")
+        return self._animation_control(AnimationAction.SEEK, node_path, progress)
+
+    def _animation_control(self, action, node_path, progress):
+        if not node_path or not node_path.strip():
+            raise ValueError("node_path must be non-empty")
+        params = {"node_path": node_path}
+        if progress is not None:
+            params["progress"] = progress
+        idem = f"anim:{node_path}:{action}:{uuid.uuid4()}"
+        return self.client.call(
+            self.target,
+            action.method(),
+            params,
+            idempotency_key=idem,
+        ).result
 
 
 class ExternalSurface:

@@ -26,11 +26,15 @@ FLOW_CAPABILITY_REQUIREMENTS: dict[str, tuple[str, ...]] = {
     "data_grid": ("ui.data_grid.window.v1",),
     "canvas": ("ui.canvas.points_lines.v1",),
     "image": ("ui.image.upload.v1",),
+    "skin": ("ui.component_skin.v1",),
     "input": ("ui.text_input.commit.v1",),
     "motion": ("ui.state.animation.v1",),
     "transition": ("ui.state.animation.v1",),
     "drag": ("ui.semantic_input.v1", "ui.intent_dispatch.v1"),
     "drop": ("ui.semantic_input.v1", "ui.intent_dispatch.v1"),
+    "shader": ("ui.shader.package.v1",),
+    "geometry": ("ui.geometry.cut.v1",),
+    "material": ("ui.shader.material.v1",),
 }
 
 # Constructs that always ride on the semantic input path.
@@ -67,10 +71,11 @@ STATE_MACHINE_HEADS = frozenset({"machine", "sync", "on", "state"})
 
 # Indent-0 directive heads the runtime special-cases before node parsing.
 DIRECTIVE_HEADS = frozenset({
-    "version", "flow", "budget", "input", "grid_input", "resource",
+    "version", "flow", "budget", "input", "grid_input", "resource", "skin", "slot",
     "text_registry", "surface_bind", "camera", "style", "binding",
-    "resource_bind",
+    "resource_bind", "shader",
 })
+SUB_DECLARATION_HEADS = frozenset({"geometry", "material"})
 
 _KEY_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 
@@ -168,6 +173,12 @@ def _node_component(line: _Line) -> str | None:
         return head
     if head == "input":
         return "input" if line.indent > 0 else None
+    if head == "skin":
+        return "skin"
+    if head in SUB_DECLARATION_HEADS:
+        return head
+    if head == "shader":
+        return "shader"
     if head in KNOWN_FLOW_COMPONENTS:
         return head
     return None
@@ -221,6 +232,7 @@ _ACCEPTED_HEADS = (
     | DECLARATION_HEADS
     | STATE_MACHINE_HEADS
     | DIRECTIVE_HEADS
+    | SUB_DECLARATION_HEADS
     | frozenset({"text", "resource_bind", "binding", "style"})
 )
 

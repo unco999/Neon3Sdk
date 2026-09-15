@@ -134,6 +134,44 @@ public:
         detail::check(rc, error);
     }
 
+    /**
+     * Upload 10 rows of vec4 to the shader's `view.extras[0..9]` uniform
+     * (wgpu.ui.set_view_extras, v0.2.7).
+     */
+    void setViewExtras(const float (&extras)[10][4]) {
+        char* error = nullptr;
+        int rc = neon3_view_set_extras(handle_, extras, &error);
+        detail::check(rc, error);
+    }
+
+    /// Pause a renderer-owned animation timeline (v0.2.10).
+    void animationPause(const std::string& nodePath) {
+        char* error = nullptr;
+        int rc = neon3_animation_pause(handle_, nodePath.c_str(), &error);
+        detail::check(rc, error);
+    }
+
+    /// Resume a paused animation timeline.
+    void animationResume(const std::string& nodePath) {
+        char* error = nullptr;
+        int rc = neon3_animation_resume(handle_, nodePath.c_str(), &error);
+        detail::check(rc, error);
+    }
+
+    /// Cancel an animation timeline.
+    void animationCancel(const std::string& nodePath) {
+        char* error = nullptr;
+        int rc = neon3_animation_cancel(handle_, nodePath.c_str(), &error);
+        detail::check(rc, error);
+    }
+
+    /// Seek an animation timeline to `progress` in [0, 1].
+    void animationSeek(const std::string& nodePath, float progress) {
+        char* error = nullptr;
+        int rc = neon3_animation_seek(handle_, nodePath.c_str(), progress, &error);
+        detail::check(rc, error);
+    }
+
     void* nativeHandle() const noexcept { return handle_; }
 
 private:

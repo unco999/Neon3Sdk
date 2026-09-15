@@ -28,6 +28,9 @@ extern "C" {
 /* Opaque client handle. */
 typedef struct neon3_client neon3_client;
 
+/* Opaque event subscription handle (long-lived eventd connection). */
+typedef struct neon3_event_subscription neon3_event_subscription;
+
 /* Stable error codes. */
 enum {
   NEON3_OK = 0,
@@ -39,6 +42,36 @@ enum {
   NEON3_ERR_UI = 6,
   NEON3_ERR_NULL_POINTER = 7
 };
+
+/* -------------------------------------------------------------------------
+ * Canonical wire constants. Use these instead of hard-coding strings; the
+ * compiler will catch a typo and your IDE will autocomplete.
+ * ------------------------------------------------------------------------- */
+
+/* Service target names. */
+#define NEON3_SERVICE_EVENTD        "eventd"
+#define NEON3_SERVICE_UI_RUNTIME    "ui-runtime"
+#define NEON3_SERVICE_WGPU_RUNTIME   "wgpu-runtime"
+
+/* RPC method names. */
+#define NEON3_METHOD_SERVICE_HEALTH              "service.health"
+#define NEON3_METHOD_SERVICE_DESCRIBE             "service.describe"
+#define NEON3_METHOD_SERVICE_SHUTDOWN            "service.shutdown"
+#define NEON3_METHOD_UI_FLOW_SUBMIT               "ui.flow.submit"
+#define NEON3_METHOD_UI_HOST_INBOUND              "ui.host.inbound"
+#define NEON3_METHOD_UI_INPUT_FRAME               "ui.input.frame"
+#define NEON3_METHOD_UI_HOST_POINTER_EVENT       "ui.host.pointer_event"
+#define NEON3_METHOD_RENDER_SURFACE_OPEN          "render.surface.open"
+#define NEON3_METHOD_RENDER_SURFACE_ACQUIRE       "render.surface.acquire"
+#define NEON3_METHOD_RENDER_SURFACE_FRAME         "render.surface.frame"
+#define NEON3_METHOD_RENDER_SURFACE_CAPTURE_PNG   "render.surface.capture_png"
+#define NEON3_METHOD_WGPU_SET_VIEW_EXTRAS        "wgpu.ui.set_view_extras"
+#define NEON3_METHOD_WGPU_ANIMATION_PREFIX        "wgpu.ui.animation."
+
+/* Event names on eventd. */
+#define NEON3_EVENT_SHADER_EVENT       "shader.event"
+#define NEON3_EVENT_FILE_DROP_ACCEPTED "ui.file_drop.accepted"
+#define NEON3_EVENT_CLICK_BLANK       "ui.click_blank"
 
 /* Create a client. endpoint is "host:port"; allow_non_loopback relaxes the
  * default loopback-only policy. Returns 0 on success. */
@@ -79,6 +112,63 @@ NEON3_API int neon3_surface_save_png(neon3_client* client,
 
 /* Request a clean runtime shutdown. */
 NEON3_API int neon3_client_shutdown(neon3_client* client, char** out_error);
+
+/* -------------------------------------------------------------------------
+ * v0.2.7: shader view_extras uniform upload.
+ * ------------------------------------------------------------------------- */
+
+/* Upload 10 rows of vec4 to the shader's view.extras[0..9] uniform
+ * (wgpu.ui.set_view_extras). extras must point to 10 rows of 4 floats. */
+NEON3_API int neon3_view_set_extras(neon3_client* client,
+                                    const float extras[10][4],
+                                    char** out_error);
+
+/* -------------------------------------------------------------------------
+ * v0.2.10: renderer-owned animation timeline control.
+ * ------------------------------------------------------------------------- */
+
+/* Pause a renderer-owned animation timeline identified by node_path. */
+NEON3_API int neon3_animation_pause(neon3_client* client,
+                                    const char* node_path,
+                                    char** out_error);
+
+/* Resume a paused animation timeline. */
+NEON3_API int neon3_animation_resume(neon3_client* client,
+                                     const char* node_path,
+                                     char** out_error);
+
+/* Cancel an animation timeline. */
+NEON3_API int neon3_animation_cancel(neon3_client* client,
+                                      const char* node_path,
+                                      char** out_error);
+
+/* Seek an animation timeline to progress in [0.0, 1.0]. */
+NEON3_API int neon3_animation_seek(neon3_client* client,
+                                   const char* node_path, float progress,
+                                   char** out_error);
+
+/* -------------------------------------------------------------------------
+ * v0.2.7: eventd subscription (for shader.event and other bus events).
+ * ------------------------------------------------------------------------- */
+
+/* Subscribe to events named `name` on eventd (default 127.0.0.1:39101).
+ * out_sub receives an opaque handle; free it with
+ * neon3_event_subscription_free. */
+NEON3_API int neon3_event_subscribe(const char* endpoint,
+                                    const char* name,
+                                    neon3_event_subscription** out_sub,
+                                    char** out_error);
+
+/* Block until one delivery frame arrives (or timeout_ms elapses). The event
+ * JSON envelope is returned through out_event_json (free with
+ * neon3_free_string). Returns NEON3_ERR_RPC with a timeout message on expiry. */
+NEON3_API int neon3_event_recv(neon3_event_subscription* sub,
+                               uint64_t timeout_ms,
+                               char** out_event_json,
+                               char** out_error);
+
+/* Free an event subscription handle. */
+NEON3_API void neon3_event_subscription_free(neon3_event_subscription* sub);
 
 #ifdef __cplusplus
 }

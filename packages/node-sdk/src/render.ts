@@ -1,4 +1,5 @@
 import { NeonClient } from "./client.js";
+import { animationMethod, AnimationAction, method as rpcMethod } from "./constants.js";
 import { ProtocolError } from "./errors.js";
 
 export type SurfaceKind = "screen_ui" | "world_ui";
@@ -264,6 +265,65 @@ export class RenderClient {
     }, { idempotencyKey: `surface-open:${open.surfaceId}` });
     if (result.result === null || typeof result.result !== "object") throw new ProtocolError("render.surface.open returned a non-object result");
     return new ExternalSurface(this, open.surfaceId, result.result);
+  }
+
+  /**
+   * Upload 10 groups of vec4 to the shader's `view.extras[0..9]` uniform
+   * (`wgpu.ui.set_view_extras`, v0.2.7). `extras` may have 1..=10 rows;
+   * missing rows are zero-padded to 10.
+   */
+  async setViewExtras(extras: number[][]): Promise<unknown> {
+    if (extras.length < 1 || extras.length > 10) {
+      throw new Error(`extras must have 1..=10 rows, got ${extras.length}`);
+    }
+    const padded: number[][] = [];
+    for (const row of extras) {
+      if (row.length !== 4) throw new Error(`each extras row must have 4 components, got ${row.length}`);
+      for (const v of row) {
+        if (!Number.isFinite(v)) throw new Error("view extras must contain only finite f32 values");
+      }
+      padded.push([...row]);
+    }
+    while (padded.length < 10) padded.push([0, 0, 0, 0]);
+    return (await this.client.call(this.target, rpcMethod.WGPU_UI_SET_VIEW_EXTRAS, { extras: padded })).result;
+  }
+
+  /** Pause a renderer-owned animation timeline (`wgpu.ui.animation.pause`, v0.2.10). */
+  async animationPause(nodePath: string): Promise<unknown> {
+    return this._animationControl("pause", nodePath, undefined);
+  }
+
+  /** Resume a paused animation timeline (`wgpu.ui.animation.resume`). */
+  async animationResume(nodePath: string): Promise<unknown> {
+    return this._animationControl("resume", nodePath, undefined);
+  }
+
+  /** Cancel an animation timeline (`wgpu.ui.animation.cancel`). */
+  async animationCancel(nodePath: string): Promise<unknown> {
+    return this._animationControl("cancel", nodePath, undefined);
+  }
+
+  /** Seek an animation timeline to `progress` in [0, 1] (`wgpu.ui.animation.seek`). */
+  async animationSeek(nodePath: string, progress: number): Promise<unknown> {
+    if (!Number.isFinite(progress) || progress < 0 || progress > 1) {
+      throw new Error(`animation progress must be finite in [0, 1], got ${progress}`);
+    }
+    return this._animationControl("seek", nodePath, progress);
+  }
+
+  private async _animationControl(action: AnimationAction, nodePath: string, progress: number | undefined): Promise<unknown> {
+    if (!nodePath || !nodePath.trim()) throw new Error("node_path must be non-empty");
+    const params: Record<string, unknown> = { node_path: nodePath };
+    if (progress !== undefined) params.progress = progress;
+    // The runtime rejects animation control without an envelope-level
+    // idempotency key (see neon-wgpu-runtime v0.2.10 lib.rs).
+    const idempotencyKey = `anim:${nodePath}:${action}:${crypto.randomUUID()}`;
+    return (await this.client.call(
+      this.target,
+      animationMethod(action),
+      params,
+      { idempotencyKey },
+    )).result;
   }
 }
 

@@ -6,7 +6,7 @@
 //! connecting to a device IP directly.
 
 use crate::wire::{
-    ClientIdentity, RpcRequest, RpcResponse, read_frame, write_frame,
+    ClientIdentity, RpcFailure, RpcRequest, RpcResponse, read_frame, write_frame,
 };
 use serde_json::{Value, json};
 use std::io::{BufReader, BufWriter, Write};
@@ -89,7 +89,21 @@ impl NeonClient {
 
     /// Perform one framed RPC and return the parsed response envelope.
     pub fn call(&mut self, target: &str, method: &str, params: Value) -> Result<RpcResponse, String> {
-        let request = RpcRequest::new(target, method, params, self.identity());
+        self.call_with_idempotency(target, method, params, None)
+    }
+
+    /// Perform one framed RPC with an explicit envelope-level idempotency key.
+    /// Required by methods the runtime deduplicates (e.g.
+    /// `wgpu.ui.animation.*`); the plain `call` leaves the field null.
+    pub fn call_with_idempotency(
+        &mut self,
+        target: &str,
+        method: &str,
+        params: Value,
+        idempotency_key: Option<String>,
+    ) -> Result<RpcResponse, String> {
+        let mut request = RpcRequest::new(target, method, params, self.identity());
+        request.idempotency_key = idempotency_key;
         write_frame(&mut self.writer, &serde_json::to_value(&request).map_err(|e| e.to_string())?)
             .map_err(|e| format!("write request: {e}"))?;
         self.writer.flush().map_err(|e| format!("flush request: {e}"))?;
@@ -109,13 +123,13 @@ impl NeonClient {
     /// Convenience: health probe.
     pub fn health(&mut self, target: &str) -> Result<Value, String> {
         let response = self.call(target, "service.health", json!({}))?;
-        response.ok().map_err(|f| f.to_string())
+        response.ok().map_err(|f: RpcFailure| f.to_string())
     }
 
     /// Convenience: service describe.
     pub fn describe(&mut self, target: &str) -> Result<Value, String> {
         let response = self.call(target, "service.describe", json!({}))?;
-        response.ok().map_err(|f| f.to_string())
+        response.ok().map_err(|f: RpcFailure| f.to_string())
     }
 }
 

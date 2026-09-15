@@ -88,6 +88,15 @@ test("flow capability requirements match the Python suite", () => {
   assert.deepEqual(requiredCapabilitiesForFlow(DATA_GRID_FLOW), ["ui.data_grid.window.v1"]);
 });
 
+test("skin declarations require the component skin capability", () => {
+  const skinFlow = "version 1\nskin primary button\n  slot body idle fill #ffffff\nsurface demo\n";
+  assert.deepEqual(requiredCapabilitiesForFlow(skinFlow), ["ui.component_skin.v1"]);
+  assert.throws(
+    () => validateFlowSource(skinFlow, CapabilitySet.of(["ui.program.v1"], "ui-runtime"), "ui-runtime"),
+    (error) => error instanceof CapabilityError && error.missing.includes("ui.component_skin.v1"),
+  );
+});
+
 test("capability owner split", () => {
   assert.equal(capabilityOwner("ui.data_grid.window.v1"), "ui-runtime");
   assert.equal(capabilityOwner("ui.canvas.points_lines.v1"), "wgpu-runtime");
@@ -122,6 +131,19 @@ test("canvas capability is not gated by a ui-runtime-only check", () => {
   assert.deepEqual(requiredCapabilitiesForFlow(canvasFlow), ["ui.canvas.points_lines.v1"]);
   // ...but a ui-runtime validation does not fail on it.
   assert.deepEqual(validateFlowSource(canvasFlow, uiOnly, "ui-runtime"), ["ui.canvas.points_lines.v1"]);
+});
+
+test("shader, material, and cut geometry scan as renderer capabilities", () => {
+  const materialFlow = `version 1
+shader pulse-glass version 1 fallback standard_ui
+surface demo
+  panel hero w 100 h 50
+    geometry cut 8 2 8 2
+    material pulse-glass overflow 4 2 4 2
+`;
+  const expected = ["ui.geometry.cut.v1", "ui.shader.material.v1", "ui.shader.package.v1"];
+  assert.deepEqual(requiredCapabilitiesForFlow(materialFlow), expected);
+  assert.deepEqual(validateFlowSource(materialFlow), expected);
 });
 
 test("unknown component reports a location", () => {

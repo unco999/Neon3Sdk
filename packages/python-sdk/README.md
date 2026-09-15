@@ -1,81 +1,108 @@
-# neon3-sdk
+# Neon3 Python SDK
 
-Python client SDK for Neon3 `neon3.rpc` and `neon3.event`.
+Python client SDK for the Neon3 control-plane protocol. Talks the same
+`neon3.rpc` wire contract as the Rust and Node SDKs over loopback TCP.
 
 ## Install
 
-```powershell
-python -m pip install --upgrade neon3-sdk
+```bash
+pip install neon3-sdk
 ```
 
-Package page: https://pypi.org/project/neon3-sdk/
+Or from source:
 
-## Application API
+```bash
+cd packages/python-sdk
+pip install -e .
+```
+
+## Quick start (facade, recommended)
 
 ```python
-from neon3_sdk import NeonApp, ObservableStore
+from neon3_sdk import start, mount, state, on
 
-with NeonApp.start(mode="windowed", origin="my-app") as app:
-    state = ObservableStore({"selected": None})
-    app.ui.mount_flow_file("app.nui")
-    app.intent("domain.select")(lambda event: state.value("selected").set(event.payload["key"]))
-    app.run()
+with start(mode="windowed", origin="demo"):
+    mount("counter.nui")
+    count = state(0)
+
+    @on("btn.increment")
+    def _():
+        count.value += 1
+
+    run()
 ```
 
-`NeonApp` manages runtime lifecycle, UI revisions, intent routing, and Store
-publication. Direct `NeonClient` remains available for protocol-level code.
-
-## Start Neon3
-
-`RuntimeSession` starts the Neon3 services as separate processes. On Windows it
-resolves and downloads the latest runtime release from:
-
-https://github.com/unco999/Neon3-CiJian/releases
+### Renderer features
 
 ```python
-from neon3_sdk import RuntimeConfig, RuntimeMode, RuntimeSession
+with start() as app:
+    mount("audio.nui")
 
-with RuntimeSession(RuntimeConfig(mode=RuntimeMode.WINDOWED)):
-    print("Neon3 services are running")
+    # Shader events (GPU -> CPU)
+    @app.shader.on(0x5F3759DF)
+    def _(payload):
+        print("energy:", payload[0])
+
+    # View extras (60 Hz throttled)
+    app.renderer.view_extras([0.1, 0.2, 0.3, 0.4])
+
+    # Animation control
+    app.anim.seek("hero.timeline", progress=0.5)
+
+    # Offscreen screenshot
+    png = app.surface.render("hello.nui", size=(1280, 720))
+    png.save("out.png")
 ```
 
-The resolved release is cached under `%LOCALAPPDATA%\Neon3Sdk\runtime\<tag>`.
-Set `NEON3_RUNTIME_VERSION=<tag>` (for example `v0.2.3`) when reproducible
-pinning is required; only pin a runtime that is at least as new as the UI
-schema your flows use, otherwise newer nodes such as `tooltip` or `canvas`
-fail with `nui_flow_unknown_attribute`.
-Set `NEON_ROOT` or pass `RuntimeConfig(neon_root="D:/Neon3", profile="debug")`
-to use a local checkout. The SDK starts `neon-eventd`, `neon-wgpu-runtime`, and
-`neon-ui-runtime`; it does not create windows or GPU resources itself.
-
-## RPC Usage
+## Low-level API
 
 ```python
-from neon3_sdk import NeonClient, UiClient
+from neon3_sdk import NeonClient, RenderClient, UiSession
 
-rpc = NeonClient.connect("127.0.0.1:39102", origin="my-tool")
-ui = UiClient(rpc)
-program = ui.submit_flow('version 1\nsurface example revision 1\nsurface root\n')
-print(program.surface_id)
+client = NeonClient.connect("127.0.0.1:39102", origin="demo")
+session = UiSession(client)
+program = session.mount_flow(open("hello.nui").read())
+
+render = RenderClient(NeonClient.connect("127.0.0.1:39103", origin="demo"))
+render.set_view_extras([[0.1, 0.2, 0.3, 0.4]])
+render.animation_pause("hero.timeline")
 ```
 
-## Event Usage
+## Constants & enums
 
 ```python
-from neon3_sdk import EventClient
+from neon3_sdk import service, method, AnimationAction
 
-with EventClient.connect("127.0.0.1:39101").subscribe(
-    name="ui.file_drop.accepted"
-) as events:
-    for image in events.file_drops():
-        print(image.file_name, image.source_path)
+client.call(service.WGPU_RUNTIME, method.WGPU_UI_SET_VIEW_EXTRAS, {...})
+client.call(service.WGPU_RUNTIME, AnimationAction.PAUSE.method(), {...})
 ```
 
-`ui.file_drop.accepted` is the existing Neon3 event bridge for OS file drops.
-Image tools can use it to start OpenCV analysis without polling.
+## Logging
 
-## Tests
-
-```powershell
-python -m unittest discover -s tests -v
+```python
+from neon3_sdk.log import configure
+configure("debug")  # or NEON3_LOG_LEVEL=debug env var
 ```
+
+## Error hierarchy
+
+```
+NeonError
+├── TransportError       # TCP / timeout (retryable)
+├── ProtocolError        # framing / envelope violation
+├── RemoteError          # runtime rejected the RPC
+├── CapabilityError      # missing required capability
+├── StaleRevisionError   # revision mismatch (retryable)
+└── ...
+```
+
+## Testing
+
+```bash
+python -m unittest discover -s tests
+```
+
+## Version
+
+- SDK 0.1.6 → runtime v0.2.10
+- See `CHANGELOG.md` for the full compatibility matrix.

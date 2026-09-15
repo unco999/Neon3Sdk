@@ -11,6 +11,9 @@ from dataclasses import dataclass
 from typing import Any
 
 from .errors import ProtocolError, RemoteError, TransportError
+from .log import get_logger
+
+_log = get_logger("rpc")
 from .models import ClientIdentity, RpcResponse, ServiceDescription, ServiceHealth
 
 RPC_PROTOCOL = "neon3.rpc"
@@ -68,11 +71,24 @@ class NeonClient:
             "expected_revision": expected_revision,
             "idempotency_key": idempotency_key,
         }
-        response = self._exchange(request)
+        import time
+        t0 = time.monotonic()
+        try:
+            response = self._exchange(request)
+        except Exception:
+            _log.debug("rpc fail target=%s method=%s request_id=%s elapsed_ms=%.1f err=%s",
+                       target, method, request_id, (time.monotonic() - t0) * 1000, "transport")
+            raise
+        elapsed_ms = (time.monotonic() - t0) * 1000
         if response.request_id != request_id:
+            _log.warning("rpc id_mismatch target=%s method=%s elapsed_ms=%.1f", target, method, elapsed_ms)
             raise ProtocolError(f"request_id_mismatch: expected {request_id}, got {response.request_id}")
         if raise_for_status and response.status != "accepted":
+            _log.info("rpc rejected target=%s method=%s request_id=%s elapsed_ms=%.1f status=%s",
+                      target, method, request_id, elapsed_ms, response.status)
             raise RemoteError(response.request_id, response.status, response.error)
+        _log.debug("rpc ok target=%s method=%s request_id=%s elapsed_ms=%.1f",
+                   target, method, request_id, elapsed_ms)
         return response
 
     def health(self, target: str) -> ServiceHealth:

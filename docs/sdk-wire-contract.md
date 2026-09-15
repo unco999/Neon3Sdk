@@ -1,8 +1,8 @@
 ---
 title: Neon3 SDK 跨语言 wire 契约（Stage 000 冻结）
-date: 2026-09-02
+date: 2026-09-15
 status: frozen
-source_runtime: Neon3-CiJian v0.2.x (commit observed 2026-09-02, cached source under .cache/neon3/source)
+source_runtime: Neon3-CiJian v0.2.10 (commit f1af66f "feat(ui): 补齐声明式动画时间线与控制面", cached source under .cache/neon3/source)
 ---
 
 # Neon3 SDK 跨语言 wire 契约
@@ -322,3 +322,62 @@ debug.interaction.v1
 - [x] Node 契约测试 `src/test/contract.test.ts` + `src/wire.ts`
 - [x] 跨语言 digest 表一致（同一组 sha256 硬编码在两侧测试）
 - [x] 错误 code 冻结（§6）与 capability 分类（§5）
+
+## 9. v0.2.7 → v0.2.10 新增 wire 接口
+
+以下三个接口在 v0.2.4 → v0.2.10 之间新增，SDK 0.1.6 已全部对齐。
+
+### 9.1 `shader.event` 事件（v0.2.7）
+
+- **eventd 事件名**：`"shader.event"`
+- **payload**：
+  ```json
+  {
+    "event_id": 12345,
+    "payload": [0.1, 0.2, 0.3, 0.4]
+  }
+  ```
+- `event_id`：u32，由 WGSL `emit_shader_event(event_id, payload)` 传入
+- `payload`：长度恒为 4 的 f32 数组
+- publisher：`wgpu-runtime`，schema_version = 1
+- idempotency_key 格式：`shader-event:{epoch}:{frame_sequence}:{index}`
+
+### 9.2 `wgpu.ui.set_view_extras` RPC（v0.2.7）
+
+- **target**：`wgpu-runtime`
+- **method**：`"wgpu.ui.set_view_extras"`
+- **params**：
+  ```json
+  { "extras": [[f32; 4]; 10] }
+  ```
+- `extras` 必须恰好 10 行（不足由 SDK padding 到 10），每行 4 个 f32
+- **result**：`{ "status": "ok", "slots": 10 }`
+- **错误码**：`invalid_request`
+
+### 9.3 `wgpu.ui.animation.{pause,resume,seek,cancel}` RPC（v0.2.10）
+
+- **target**：`wgpu-runtime`
+- **method**：`"wgpu.ui.animation." + action`（action ∈ {pause, resume, seek, cancel}）
+- **params**：
+  ```json
+  {
+    "node_path": "hero.timeline",
+    "progress": 0.5
+  }
+  ```
+- `node_path`：必填，非空字符串
+- `progress`：仅 `seek` 需要，f32 ∈ [0, 1]
+- **强制 envelope-level idempotency_key**：不传直接 reject（runtime 源码检查）
+- **错误码**：`animation_node_required` / `animation_progress_invalid` /
+  `window_compositor_unavailable` / `window_compositor_timeout` /
+  `backend_not_available`
+- **capability**：`wgpu.ui.animation.control.v1`（硬编码）+
+  `wgpu.ui.timeline.animation.v1`（CAPABILITY_TIMELINE_ANIMATION）
+- **限制**：仅窗口化渲染器可用，headless 下 SDK 应本地拒绝
+
+### 9.4 `ui.click_blank` 语义事件（v0.2.9）
+
+- kind：`semantic_intent`
+- intent：`"ui.click_blank"`
+- payload 携带 vec2 坐标
+- Python/Node `models.py` 的 kind 是自由字符串，代码零改动即可消费

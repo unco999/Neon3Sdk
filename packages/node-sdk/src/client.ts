@@ -1,5 +1,8 @@
 import net from "node:net";
 import { ProtocolError, RemoteError, TransportError } from "./errors.js";
+import { getLogger } from "./log.js";
+
+const log = getLogger("rpc");
 import { parseRpcResponse, PROTOCOL_VERSION, ProtocolShapeError, RPC_PROTOCOL, RpcResponse, ServiceDescription, ServiceHealth } from "./protocol.js";
 
 export interface ClientOptions {
@@ -67,10 +70,24 @@ export class NeonClient {
       expected_revision: options.expectedRevision ?? null,
       idempotency_key: options.idempotencyKey ?? null,
     };
-    const response = await this.exchange<T>(request);
-    if (response.request_id !== requestId) throw new ProtocolError(`request_id_mismatch: expected ${requestId}, got ${response.request_id}`);
-    if ((options.raiseForStatus ?? true) && response.status !== "accepted") throw new RemoteError(response.request_id, response.status, response.error);
-    return response;
+    const t0 = performance.now();
+    try {
+      const response = await this.exchange<T>(request);
+      const elapsedMs = performance.now() - t0;
+      if (response.request_id !== requestId) {
+        log.warn(`id_mismatch target=${target} method=${method} elapsed_ms=${elapsedMs.toFixed(1)}`);
+        throw new ProtocolError(`request_id_mismatch: expected ${requestId}, got ${response.request_id}`);
+      }
+      if ((options.raiseForStatus ?? true) && response.status !== "accepted") {
+        log.info(`rejected target=${target} method=${method} request_id=${requestId} elapsed_ms=${elapsedMs.toFixed(1)} status=${response.status}`);
+        throw new RemoteError(response.request_id, response.status, response.error);
+      }
+      log.debug(`ok target=${target} method=${method} request_id=${requestId} elapsed_ms=${elapsedMs.toFixed(1)}`);
+      return response;
+    } catch (err) {
+      log.debug(`fail target=${target} method=${method} request_id=${requestId} elapsed_ms=${(performance.now() - t0).toFixed(1)}`);
+      throw err;
+    }
   }
 
   async health(target: string): Promise<ServiceHealth> {

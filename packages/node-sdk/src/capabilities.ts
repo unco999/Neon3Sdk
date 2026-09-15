@@ -15,11 +15,15 @@ export const FLOW_CAPABILITY_REQUIREMENTS: Record<string, string[]> = {
   data_grid: ["ui.data_grid.window.v1"],
   canvas: ["ui.canvas.points_lines.v1"],
   image: ["ui.image.upload.v1"],
+  skin: ["ui.component_skin.v1"],
   input: ["ui.text_input.commit.v1"],
   motion: ["ui.state.animation.v1"],
   transition: ["ui.state.animation.v1"],
   drag: ["ui.semantic_input.v1", "ui.intent_dispatch.v1"],
   drop: ["ui.semantic_input.v1", "ui.intent_dispatch.v1"],
+  shader: ["ui.shader.package.v1"],
+  geometry: ["ui.geometry.cut.v1"],
+  material: ["ui.shader.material.v1"],
 };
 
 export const SEMANTIC_EVENT_CAPABILITIES = ["ui.semantic_input.v1", "ui.intent_dispatch.v1"];
@@ -36,11 +40,13 @@ export const KNOWN_FLOW_COMPONENTS: ReadonlySet<string> = new Set([
 const DECLARATION_HEADS = new Set(["drag", "drop", "motion", "transition"]);
 const STATE_MACHINE_HEADS = new Set(["machine", "sync", "on", "state"]);
 const DIRECTIVE_HEADS = new Set([
-  "version", "flow", "budget", "input", "grid_input", "resource",
+  "version", "flow", "budget", "input", "grid_input", "resource", "skin", "slot",
   "text_registry", "surface_bind", "camera", "style", "binding", "resource_bind",
+  "shader",
 ]);
+const SUB_DECLARATION_HEADS = new Set(["geometry", "material"]);
 const ACCEPTED_HEADS: ReadonlySet<string> = new Set([
-  ...KNOWN_FLOW_COMPONENTS, ...DECLARATION_HEADS, ...STATE_MACHINE_HEADS, ...DIRECTIVE_HEADS,
+  ...KNOWN_FLOW_COMPONENTS, ...DECLARATION_HEADS, ...STATE_MACHINE_HEADS, ...DIRECTIVE_HEADS, ...SUB_DECLARATION_HEADS,
   "text", "resource_bind", "binding", "style",
 ]);
 
@@ -141,6 +147,9 @@ function nodeComponent(line: ContentLine): string | null {
   if (DECLARATION_HEADS.has(head)) return head;
   if (head === "data_grid" || head === "canvas" || head === "image") return head;
   if (head === "input") return line.indent > 0 ? "input" : null;
+  if (head === "skin") return "skin";
+  if (SUB_DECLARATION_HEADS.has(head)) return head;
+  if (head === "shader") return "shader";
   if (KNOWN_FLOW_COMPONENTS.has(head)) return head;
   return null;
 }

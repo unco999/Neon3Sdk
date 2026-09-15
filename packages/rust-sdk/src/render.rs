@@ -1,6 +1,7 @@
 //! Rendering, camera, external-surface, and pointer APIs.
 
 use crate::client::NeonClient;
+use crate::constants::{method as m, AnimationAction};
 use crate::wire::RpcFailure;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -129,6 +130,86 @@ impl RenderClient {
     /// Request a clean runtime shutdown.
     pub fn shutdown(&mut self) -> Result<Value, String> {
         let response = self.client.call(&self.target, "service.shutdown", json!({}))?;
+        response.ok().map_err(|f: RpcFailure| f.to_string())
+    }
+
+    /// Upload 10 groups of `vec4<f32>` to the shader's `view.extras[0..9]`
+    /// uniform (`wgpu.ui.set_view_extras`, v0.2.7).
+    ///
+    /// `extras` may have 1..=10 rows; missing rows are zero-padded to 10.
+    /// Values outside the finite range are rejected locally before any RPC.
+    pub fn set_view_extras(&mut self, extras: &[[f32; 4]]) -> Result<Value, String> {
+        if extras.is_empty() || extras.len() > 10 {
+            return Err(format!("extras must have 1..=10 rows, got {}", extras.len()));
+        }
+        for row in extras.iter() {
+            for v in row.iter() {
+                if !v.is_finite() {
+                    return Err("view extras must contain only finite f32 values".into());
+                }
+            }
+        }
+        let mut padded: Vec<Vec<f32>> = extras.iter().map(|r| r.to_vec()).collect();
+        while padded.len() < 10 {
+            padded.push(vec![0.0; 4]);
+        }
+        let response = self.client.call(
+            &self.target,
+            m::WGPU_UI_SET_VIEW_EXTRAS,
+            json!({ "extras": padded }),
+        )?;
+        response.ok().map_err(|f: RpcFailure| f.to_string())
+    }
+
+    /// Pause a renderer-owned animation timeline
+    /// (`wgpu.ui.animation.pause`, v0.2.10). Requires the windowed renderer;
+    /// headless surfaces return `backend_not_available`.
+    pub fn animation_pause(&mut self, node_path: &str) -> Result<Value, String> {
+        self.animation_control(AnimationAction::Pause, node_path, None)
+    }
+
+    /// Resume a paused animation timeline (`wgpu.ui.animation.resume`).
+    pub fn animation_resume(&mut self, node_path: &str) -> Result<Value, String> {
+        self.animation_control(AnimationAction::Resume, node_path, None)
+    }
+
+    /// Cancel an animation timeline (`wgpu.ui.animation.cancel`).
+    pub fn animation_cancel(&mut self, node_path: &str) -> Result<Value, String> {
+        self.animation_control(AnimationAction::Cancel, node_path, None)
+    }
+
+    /// Seek an animation timeline to `progress` in `[0.0, 1.0]`
+    /// (`wgpu.ui.animation.seek`). Out-of-range progress is rejected locally.
+    pub fn animation_seek(&mut self, node_path: &str, progress: f32) -> Result<Value, String> {
+        if !(0.0..=1.0).contains(&progress) || !progress.is_finite() {
+            return Err(format!("animation progress must be finite in [0, 1], got {progress}"));
+        }
+        self.animation_control(AnimationAction::Seek, node_path, Some(progress))
+    }
+
+    fn animation_control(
+        &mut self,
+        action: AnimationAction,
+        node_path: &str,
+        progress: Option<f32>,
+    ) -> Result<Value, String> {
+        if node_path.trim().is_empty() {
+            return Err("node_path must be non-empty".into());
+        }
+        let mut params = serde_json::Map::new();
+        params.insert("node_path".into(), json!(node_path));
+        if let Some(p) = progress {
+            params.insert("progress".into(), json!(p));
+        }
+        // The runtime rejects animation control without an envelope-level
+        // idempotency key (see neon-wgpu-runtime v0.2.10 lib.rs).
+        let idempotency_key = format!("anim:{node_path}:{}:{}", action.as_wire(), uuid::Uuid::new_v4());
+        let response = self.client.call_with_idempotency(
+            &self.target,
+            &action.method(),
+            Value::Object(params),
+            Some(idempotency_key),
+        )?;
         response.ok().map_err(|f: RpcFailure| f.to_string())
     }
 }

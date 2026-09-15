@@ -8,6 +8,16 @@ export interface EventFilter {
   publisher_kinds?: string[];
 }
 
+/**
+ * One `shader.event` delivery (v0.2.7). `eventId` is the u32 caller-chosen
+ * id (typically an FNV-1a hash) the WGSL side passed to `emit_shader_event`;
+ * `payload` is the 4-component vec4 it carried.
+ */
+export interface ShaderEvent {
+  eventId: number;
+  payload: [number, number, number, number];
+}
+
 const MAX_FRAME_SIZE = 64 * 1024;
 
 export class EventSubscription {
@@ -58,6 +68,29 @@ export class EventSubscription {
       try {
         const event = await this.recv(timeoutMs);
         if (event.name === name) yield event;
+      } catch (error) {
+        if (error instanceof TransportError && error.message === "event recv timeout") return;
+        throw error;
+      }
+    }
+  }
+
+  /**
+   * Yield parsed `shader.event` deliveries (v0.2.7). Skips non-shader events;
+   * a timeout ends the generator.
+   */
+  async *shaderEvents(timeoutMs?: number): AsyncGenerator<ShaderEvent> {
+    for (;;) {
+      try {
+        const event = await this.recv(timeoutMs);
+        if (event.name !== "shader.event") continue;
+        const payload = event.payload as { event_id?: number; payload?: number[] };
+        if (typeof payload.event_id !== "number" || !Array.isArray(payload.payload) || payload.payload.length !== 4) {
+          throw new ProtocolError("malformed shader.event payload");
+        }
+        yield { eventId: payload.event_id, payload: [
+          payload.payload[0], payload.payload[1], payload.payload[2], payload.payload[3],
+        ] };
       } catch (error) {
         if (error instanceof TransportError && error.message === "event recv timeout") return;
         throw error;

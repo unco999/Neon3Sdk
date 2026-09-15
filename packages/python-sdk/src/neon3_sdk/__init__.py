@@ -4,6 +4,8 @@ from .client import NeonClient
 from .android import AndroidConfig, AndroidSession
 from .app import NeonApp, InboundOutcome
 from .calculator import CalculatorDomain, CalculatorServer
+from .constants import AnimationAction, SurfaceKind as ConstSurfaceKind, event_name, method, service
+from .facade import FacadeApp, State, mount, on, run, start, state
 from .capabilities import CapabilitySet, describe_capabilities, required_capabilities_for_flow, scan_flow, validate_flow_source
 from .components import BindingPage, CollectionBinder, CollectionBinding, DragSpec, DropSpec
 from .errors import (
@@ -51,12 +53,16 @@ from .runtime import RuntimeConfig, RuntimeEndpoints, RuntimeMode, RuntimeSessio
 from .session import IntentResult, UiSession
 from .store import CollectionStore, ObservableStore, ScalarStore, SelectionStore, typed_value
 from .ui import UiClient, UiProgram
-from .event import EventClient, EventFilter, EventSubscription
+from .event import EventClient, EventFilter, EventSubscription, ShaderEvent
 from .wire import CORE_ERROR_CODES, canonical_json, fixture_path, load_fixture
 
 __all__ = [
     "AssetRef",
+    "AnimationAction",
     "BindingPage",
+    "event_name",
+    "method",
+    "service",
     "CapabilityError",
     "CapabilitySet",
     "ClientIdentity",
@@ -110,6 +116,7 @@ __all__ = [
     "SelectionStore",
     "ServiceDescription",
     "ServiceHealth",
+    "ShaderEvent",
     "StaleRevisionError",
     "SurfaceKind",
     "SurfaceOpen",

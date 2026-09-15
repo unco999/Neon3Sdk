@@ -11,11 +11,21 @@ const NEON3_RUNTIME_ASSET = (version: string) => `neon3-runtime-windows-x86_64-$
 
 export type RuntimeMode = "windowed" | "headless" | "external_surface";
 export type RuntimeProfile = "auto" | "debug" | "release";
-export interface RuntimeConfig { neonRoot?: string; mode?: RuntimeMode; profile?: RuntimeProfile; runtimeVersion?: string; eventd?: string; ui?: string; wgpu?: string; domain?: string; timeoutMs?: number; }
+/** Native window composition, independent from NUI/Flow panel colors. */
+export interface WindowBackdropConfig {
+  kind: "none" | "transparent" | "acrylic";
+  /** Gaussian blur radius in logical pixels, from 0 through 64. */
+  blurAmount?: number;
+  /** Opaque RGB hex (`#RRGGBB`) used as the glass absorption tint. */
+  tint?: string;
+  /** Coverage of the tint over the blurred desktop, from 0 through 1. */
+  tintOpacity?: number;
+}
+export interface RuntimeConfig { neonRoot?: string; mode?: RuntimeMode; profile?: RuntimeProfile; runtimeVersion?: string; eventd?: string; ui?: string; wgpu?: string; domain?: string; timeoutMs?: number; windowBackdrop?: WindowBackdropConfig; }
 
 export class RuntimeSession {
   private processes: ChildProcess[] = [];
-  readonly config: Required<RuntimeConfig>;
+  readonly config: Omit<Required<RuntimeConfig>, "windowBackdrop"> & Pick<RuntimeConfig, "windowBackdrop">;
   private executableDir = "";
   private selectedProfile: Exclude<RuntimeProfile, "auto"> = "debug";
   constructor(config: RuntimeConfig) {
@@ -35,11 +45,33 @@ export class RuntimeSession {
       ["ui", join(this.executableDir, "neon-ui-runtime.exe"), ["--forward-server", this.config.ui, this.config.wgpu, this.config.domain, "--eventd", this.config.eventd]],
     ];
     try {
-      for (const [name, executable, args] of specs) { await access(executable); this.processes.push(spawn(executable, args, { cwd: this.config.neonRoot, stdio: "ignore", windowsHide: false })); void name; }
+      for (const [name, executable, args] of specs) {
+        await access(executable);
+        this.processes.push(spawn(executable, args, {
+          cwd: this.config.neonRoot,
+          stdio: "ignore",
+          windowsHide: false,
+          env: name === "wgpu" ? this.wgpuEnvironment() : process.env,
+        }));
+      }
       await this.waitReady();
     } catch (error) { await this.stop(); throw error; }
   }
   private wgpuArgs(): string[] { return this.config.mode === "headless" ? ["--headless-server", this.config.wgpu] : ["--window-server", this.config.wgpu, this.config.ui, "--eventd", this.config.eventd]; }
+  private wgpuEnvironment(): NodeJS.ProcessEnv {
+    const backdrop = this.config.windowBackdrop;
+    if (!backdrop) return process.env;
+    if (!Number.isFinite(backdrop.blurAmount ?? 0) || (backdrop.blurAmount ?? 0) < 0 || (backdrop.blurAmount ?? 0) > 64) throw new Error("windowBackdrop.blurAmount must be between 0 and 64");
+    if (!Number.isFinite(backdrop.tintOpacity ?? 0) || (backdrop.tintOpacity ?? 0) < 0 || (backdrop.tintOpacity ?? 0) > 1) throw new Error("windowBackdrop.tintOpacity must be between 0 and 1");
+    if (backdrop.tint !== undefined && !/^#[0-9a-fA-F]{6}$/.test(backdrop.tint)) throw new Error("windowBackdrop.tint must use #RRGGBB");
+    return {
+      ...process.env,
+      NEON_WINDOW_BACKDROP: backdrop.kind,
+      ...(backdrop.blurAmount !== undefined ? { NEON_BLUR_AMOUNT: String(backdrop.blurAmount) } : {}),
+      ...(backdrop.tint !== undefined ? { NEON_BACKDROP_TINT: backdrop.tint } : {}),
+      ...(backdrop.tintOpacity !== undefined ? { NEON_BACKDROP_TINT_OPACITY: String(backdrop.tintOpacity) } : {}),
+    };
+  }
   private async findExecutableDir(): Promise<string> {
     const requested = this.config.profile;
     const profiles: Array<Exclude<RuntimeProfile, "auto">> = requested === "auto" ? ["release", "debug"] : [requested];

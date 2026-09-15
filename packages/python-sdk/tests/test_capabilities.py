@@ -83,6 +83,14 @@ class CapabilitySetTests(unittest.TestCase):
         self.assertEqual(required_capabilities_for_flow(CALCULATOR_FLOW), ("ui.intent_dispatch.v1", "ui.semantic_input.v1"))
         self.assertIn("ui.data_grid.window.v1", required_capabilities_for_flow(DATA_GRID_FLOW))
 
+    def test_skin_declarations_require_component_skin_capability(self) -> None:
+        skin_flow = "version 1\nskin primary button\n  slot body idle fill #ffffff\nsurface demo\n"
+        self.assertEqual(required_capabilities_for_flow(skin_flow), ("ui.component_skin.v1",))
+        stripped = CapabilitySet(services=("ui-runtime",), capabilities=frozenset({"ui.program.v1"}))
+        with self.assertRaises(CapabilityError) as caught:
+            validate_flow_source(skin_flow, stripped)
+        self.assertIn("ui.component_skin.v1", caught.exception.missing)
+
     def test_scan_records_positions(self) -> None:
         infos = scan_flow(DATA_GRID_FLOW)
         grid = next(info for info in infos if info.component == "data_grid")
@@ -106,6 +114,18 @@ class CapabilitySetTests(unittest.TestCase):
             validate_flow_source(bad)
         self.assertEqual(caught.exception.line, 3)
         self.assertEqual(caught.exception.code_runtime, "nui_flow_unknown_component")
+
+    def test_shader_material_and_geometry_require_renderer_capabilities(self) -> None:
+        material_flow = """version 1
+shader pulse-glass version 1 fallback standard_ui
+surface demo
+  panel hero w 100 h 50
+    geometry cut 8 2 8 2
+    material pulse-glass overflow 4 2 4 2
+"""
+        expected = ("ui.geometry.cut.v1", "ui.shader.material.v1", "ui.shader.package.v1")
+        self.assertEqual(required_capabilities_for_flow(material_flow), expected)
+        self.assertEqual(validate_flow_source(material_flow), expected)
 
 
 class ErrorCodeMappingTests(unittest.TestCase):

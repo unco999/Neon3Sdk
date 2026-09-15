@@ -95,6 +95,7 @@ dependencies = [
  "libloading",
  "neon3-sdk",
  "serde_json",
+ "uuid",
 ]
 
 [[package]]

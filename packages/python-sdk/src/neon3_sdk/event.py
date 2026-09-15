@@ -32,6 +32,35 @@ class EventFilter:
         }
 
 
+@dataclass(frozen=True)
+class ShaderEvent:
+    """One ``shader.event`` delivery (v0.2.7).
+
+    ``event_id`` is the u32 caller-chosen id (typically an FNV-1a hash) the
+    WGSL side passed to ``emit_shader_event``; ``payload`` is the 4-component
+    vec4 it carried.
+    """
+
+    event_id: int
+    payload: tuple[float, float, float, float]
+
+    @classmethod
+    def from_payload(cls, payload: Any) -> "ShaderEvent":
+        if not isinstance(payload, dict):
+            raise ProtocolError("shader.event payload must be an object")
+        event_id = payload.get("event_id")
+        if not isinstance(event_id, int) or event_id < 0:
+            raise ProtocolError("shader.event payload missing u32 event_id")
+        raw = payload.get("payload")
+        if not isinstance(raw, list) or len(raw) != 4:
+            raise ProtocolError("shader.event payload must have a 4-element array")
+        try:
+            vec4 = tuple(float(v) for v in raw)  # type: ignore[arg-type]
+        except (TypeError, ValueError) as exc:
+            raise ProtocolError(f"shader.event payload must be numeric: {exc}") from exc
+        return cls(event_id=int(event_id), payload=vec4)  # type: ignore[arg-type]
+
+
 class EventSubscription:
     def __init__(self, stream: socket.socket, reader: "_FrameReader", client: ClientIdentity, filters: list[EventFilter]) -> None:
         self._stream = stream
@@ -92,6 +121,19 @@ class EventSubscription:
                 return
             if event.name == name:
                 yield event.payload
+
+    def shader_events(self, *, timeout_seconds: float | None = None) -> Iterator[ShaderEvent]:
+        """Yield parsed ``shader.event`` deliveries (v0.2.7).
+
+        Skips non-shader events; a timeout ends the iterator.
+        """
+        while True:
+            try:
+                event = self.recv(timeout_seconds=timeout_seconds)
+            except TimeoutError:
+                return
+            if event.name == "shader.event":
+                yield ShaderEvent.from_payload(event.payload)
 
     def close(self) -> None:
         self._stream.close()

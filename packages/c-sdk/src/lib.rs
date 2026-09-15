@@ -11,10 +11,11 @@
 //! - The C ABI talks the wire contract directly (not the Rust facade types),
 //!   so the opaque handle stays movable behind the mutex.
 
-use neon3_sdk::NeonClient;
+use neon3_sdk::{EventClient, NeonClient};
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int};
 use std::sync::Mutex;
+use std::time::Duration;
 
 /// Opaque client handle. The wrapped client is protected by a mutex so FFI
 /// callers may share the handle across threads.
@@ -300,6 +301,189 @@ pub unsafe extern "C" fn neon3_client_shutdown(
     match result {
         Ok(_) => NEON3_OK,
         Err((code, message)) => unsafe { fail(code, &message, out_error) },
+    }
+}
+
+/// Opaque event subscription handle: a long-lived eventd connection.
+pub struct neon3_event_subscription {
+    sub: Mutex<neon3_sdk::EventSubscription>,
+}
+
+/// Upload 10 rows of vec4 to the shader's view.extras[0..9] uniform
+/// (wgpu.ui.set_view_extras, v0.2.7).
+#[no_mangle]
+pub unsafe extern "C" fn neon3_view_set_extras(
+    client: *mut neon3_client,
+    extras: *const [[f32; 4]; 10],
+    out_error: *mut *mut c_char,
+) -> c_int {
+    if extras.is_null() {
+        return unsafe { fail(NEON3_ERR_NULL_POINTER, "extras must not be null", out_error) };
+    }
+    let rows: [[f32; 4]; 10] = unsafe { *extras };
+    let result = with_client(client, |inner| {
+        let v: Vec<Vec<f32>> = rows.iter().map(|r| r.to_vec()).collect();
+        inner.call(
+            "wgpu-runtime",
+            "wgpu.ui.set_view_extras",
+            serde_json::json!({ "extras": v }),
+        ).and_then(|r| r.ok().map_err(|f| f.to_string()))
+    });
+    match result {
+        Ok(_) => NEON3_OK,
+        Err((code, message)) => unsafe { fail(code, &message, out_error) },
+    }
+}
+
+/// Pause a renderer-owned animation timeline (v0.2.10).
+#[no_mangle]
+pub unsafe extern "C" fn neon3_animation_pause(
+    client: *mut neon3_client,
+    node_path: *const c_char,
+    out_error: *mut *mut c_char,
+) -> c_int {
+    animation_control(client, "pause", node_path, None, out_error)
+}
+
+/// Resume a paused animation timeline (v0.2.10).
+#[no_mangle]
+pub unsafe extern "C" fn neon3_animation_resume(
+    client: *mut neon3_client,
+    node_path: *const c_char,
+    out_error: *mut *mut c_char,
+) -> c_int {
+    animation_control(client, "resume", node_path, None, out_error)
+}
+
+/// Cancel an animation timeline (v0.2.10).
+#[no_mangle]
+pub unsafe extern "C" fn neon3_animation_cancel(
+    client: *mut neon3_client,
+    node_path: *const c_char,
+    out_error: *mut *mut c_char,
+) -> c_int {
+    animation_control(client, "cancel", node_path, None, out_error)
+}
+
+/// Seek an animation timeline to progress in [0, 1] (v0.2.10).
+#[no_mangle]
+pub unsafe extern "C" fn neon3_animation_seek(
+    client: *mut neon3_client,
+    node_path: *const c_char,
+    progress: f32,
+    out_error: *mut *mut c_char,
+) -> c_int {
+    if !progress.is_finite() || !(0.0..=1.0).contains(&progress) {
+        return unsafe { fail(NEON3_ERR_INVALID_ARG, "progress must be finite in [0,1]", out_error) };
+    }
+    animation_control(client, "seek", node_path, Some(progress), out_error)
+}
+
+fn animation_control(
+    client: *mut neon3_client,
+    action: &str,
+    node_path: *const c_char,
+    progress: Option<f32>,
+    out_error: *mut *mut c_char,
+) -> c_int {
+    let node_path = match unsafe { param_str(node_path) } {
+        Ok(s) => s.to_owned(),
+        Err(code) => return unsafe { fail(code, "node_path must be a C string", out_error) },
+    };
+    if node_path.trim().is_empty() {
+        return unsafe { fail(NEON3_ERR_INVALID_ARG, "node_path must be non-empty", out_error) };
+    }
+    let mut params = serde_json::Map::new();
+    params.insert("node_path".into(), serde_json::json!(node_path));
+    if let Some(p) = progress {
+        params.insert("progress".into(), serde_json::json!(p));
+    }
+    let idem = format!("anim:{}:{}:{}", node_path, action, uuid::Uuid::new_v4());
+    let result = with_client(client, |inner| {
+        inner.call_with_idempotency(
+            "wgpu-runtime",
+            &format!("wgpu.ui.animation.{}", action),
+            serde_json::Value::Object(params),
+            Some(idem),
+        ).and_then(|r| r.ok().map_err(|f| f.to_string()))
+    });
+    match result {
+        Ok(_) => NEON3_OK,
+        Err((code, message)) => unsafe { fail(code, &message, out_error) },
+    }
+}
+
+/// Subscribe to events named `name` on eventd (v0.2.7).
+#[no_mangle]
+pub unsafe extern "C" fn neon3_event_subscribe(
+    endpoint: *const c_char,
+    name: *const c_char,
+    out_sub: *mut *mut neon3_event_subscription,
+    out_error: *mut *mut c_char,
+) -> c_int {
+    let endpoint_s = match unsafe { param_str(endpoint) } {
+        Ok(s) => s.to_owned(),
+        Err(code) => return unsafe { fail(code, "endpoint must be a C string", out_error) },
+    };
+    let name_s = match unsafe { param_str(name) } {
+        Ok(s) => s.to_owned(),
+        Err(code) => return unsafe { fail(code, "name must be a C string", out_error) },
+    };
+    if out_sub.is_null() {
+        return unsafe { fail(NEON3_ERR_NULL_POINTER, "out_sub must not be null", out_error) };
+    }
+    let client = EventClient::new(endpoint_s).with_origin("neon3-c");
+    match client.subscribe(&name_s) {
+        Ok(sub) => {
+            let handle = Box::new(neon3_event_subscription { sub: Mutex::new(sub) });
+            *out_sub = Box::into_raw(handle);
+            NEON3_OK
+        }
+        Err(e) => unsafe { fail(NEON3_ERR_RPC, &format!("subscribe failed: {e}"), out_error) },
+    }
+}
+
+/// Block until one delivery frame arrives (or timeout_ms elapses).
+#[no_mangle]
+pub unsafe extern "C" fn neon3_event_recv(
+    sub: *mut neon3_event_subscription,
+    timeout_ms: u64,
+    out_event_json: *mut *mut c_char,
+    out_error: *mut *mut c_char,
+) -> c_int {
+    if sub.is_null() {
+        return unsafe { fail(NEON3_ERR_NULL_POINTER, "sub is null", out_error) };
+    }
+    if out_event_json.is_null() {
+        return unsafe { fail(NEON3_ERR_NULL_POINTER, "out_event_json must not be null", out_error) };
+    }
+    let handle = unsafe { sub.as_ref() }.unwrap();
+    let mut guard = match handle.sub.lock() {
+        Ok(g) => g,
+        Err(_) => return unsafe { fail(NEON3_ERR_RPC, "subscription lock poisoned", out_error) },
+    };
+    let timeout = if timeout_ms == 0 { None } else { Some(Duration::from_millis(timeout_ms)) };
+    match guard.recv(timeout) {
+        Ok(envelope) => {
+            let json = serde_json::to_string(&serde_json::json!({
+                "name": envelope.name,
+                "schema_version": envelope.schema_version,
+                "epoch": envelope.epoch,
+                "sequence": envelope.sequence,
+                "payload": envelope.payload,
+            })).unwrap_or_else(|_| "{}".into());
+            unsafe { set_out(out_event_json, &json) };
+            NEON3_OK
+        }
+        Err(e) => unsafe { fail(NEON3_ERR_RPC, &e, out_error) },
+    }
+}
+
+/// Free an event subscription handle.
+#[no_mangle]
+pub unsafe extern "C" fn neon3_event_subscription_free(sub: *mut neon3_event_subscription) {
+    if !sub.is_null() {
+        drop(Box::from_raw(sub));
     }
 }
 
