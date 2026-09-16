@@ -189,7 +189,8 @@ private:
  */
 class EditorClient {
 public:
-    explicit EditorClient(Client& client) noexcept : handle_(client.nativeHandle()) {}
+    explicit EditorClient(Client& client) noexcept
+        : handle_(static_cast<neon3_client*>(client.nativeHandle())) {}
 
     /// editor.document.open — returns {"state": "opened"|"already_open", ...}.
     /// language must be "nui_flow".
