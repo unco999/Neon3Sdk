@@ -178,6 +178,157 @@ private:
     neon3_client* handle_ = nullptr;
 };
 
+/**
+ * Headless editor document client (editor-runtime, v0.2.10+).
+ *
+ * Wraps the `neon3_editor_*` C ABI: open documents, apply change sets
+ * (draft/commit), request completions, and close. The C ABI returns raw JSON
+ * for each call; this class keeps that shape so every language SDK exposes
+ * the same wire contract. `EditorClient` borrows the `Client`'s handle —
+ * keep the `Client` alive for the `EditorClient`'s lifetime.
+ */
+class EditorClient {
+public:
+    explicit EditorClient(Client& client) noexcept : handle_(client.nativeHandle()) {}
+
+    /// editor.document.open — returns {"state": "opened"|"already_open", ...}.
+    /// language must be "nui_flow".
+    std::string open(const std::string& document_id, const std::string& session_id,
+                     const std::string& source, const std::string& language) {
+        char* error = nullptr;
+        char* result = nullptr;
+        int rc = neon3_editor_open(handle_, document_id.c_str(), session_id.c_str(),
+                                   source.c_str(), language.c_str(), &result, &error);
+        return finish(rc, result, error);
+    }
+
+    /// editor.document.snapshot.get — returns {"state": "ready", "snapshot": ...}.
+    std::string snapshot(const std::string& document_id, const std::string& session_id,
+                         uint64_t epoch) {
+        char* error = nullptr;
+        char* result = nullptr;
+        int rc = neon3_editor_snapshot(handle_, document_id.c_str(), session_id.c_str(),
+                                       epoch, &result, &error);
+        return finish(rc, result, error);
+    }
+
+    /// editor.document.change.apply — `changeset_json` is
+    /// {"base_revision": u64, "ops": [...]} with ops tagged kind insert/delete;
+    /// `kind` is "draft" or "commit".
+    std::string applyChange(const std::string& document_id, const std::string& session_id,
+                            uint64_t epoch, const std::string& changeset_json,
+                            const std::string& kind) {
+        char* error = nullptr;
+        char* result = nullptr;
+        int rc = neon3_editor_apply(handle_, document_id.c_str(), session_id.c_str(),
+                                    epoch, changeset_json.c_str(), kind.c_str(),
+                                    &result, &error);
+        return finish(rc, result, error);
+    }
+
+    /// editor.document.change.commit — envelope carries expected_revision;
+    /// a stale value is rejected with editor_revision_conflict.
+    std::string commit(const std::string& document_id, const std::string& session_id,
+                       uint64_t epoch, uint64_t expected_revision) {
+        char* error = nullptr;
+        char* result = nullptr;
+        int rc = neon3_editor_commit(handle_, document_id.c_str(), session_id.c_str(),
+                                     epoch, expected_revision, &result, &error);
+        return finish(rc, result, error);
+    }
+
+    /// editor.completion.request — trigger_kind is "automatic", "invoked",
+    /// or "trigger_character".
+    std::string completions(const std::string& document_id, const std::string& session_id,
+                            uint64_t epoch, uint64_t document_revision,
+                            uint32_t line, uint32_t column,
+                            const std::string& trigger_kind) {
+        char* error = nullptr;
+        char* result = nullptr;
+        int rc = neon3_editor_completions(handle_, document_id.c_str(), session_id.c_str(),
+                                          epoch, document_revision, line, column,
+                                          trigger_kind.c_str(), &result, &error);
+        return finish(rc, result, error);
+    }
+
+    /// editor.document.close — returns {"state": "closed", ...}.
+    std::string close(const std::string& document_id, const std::string& session_id,
+                      uint64_t epoch) {
+        char* error = nullptr;
+        char* result = nullptr;
+        int rc = neon3_editor_close(handle_, document_id.c_str(), session_id.c_str(),
+                                    epoch, &result, &error);
+        return finish(rc, result, error);
+    }
+
+private:
+    static std::string finish(int rc, char* result, char* error) {
+        if (rc != NEON3_OK) {
+            std::string message = error ? error : "neon3 editor rpc error";
+            if (error) neon3_free_string(error);
+            throw Error(rc, message);
+        }
+        detail::Ptr<char> owned(result);
+        return std::string(owned.get() ? owned.get() : "");
+    }
+
+    neon3_client* handle_;
+};
+
+/**
+ * Long-lived eventd subscription (v0.2.7+, for shader.event and other bus
+ * events). RAII: subscribes on construction and frees the handle on
+ * destruction. `recv` blocks until one delivery frame arrives or the timeout
+ * expires (timeout surfaces as neon3::Error with code NEON3_ERR_RPC).
+ */
+class EventSubscription {
+public:
+    EventSubscription(const std::string& endpoint, const std::string& name) {
+        char* error = nullptr;
+        int rc = neon3_event_subscribe(endpoint.c_str(), name.c_str(), &sub_, &error);
+        detail::check(rc, error);
+    }
+    ~EventSubscription() {
+        if (sub_) {
+            neon3_event_subscription_free(sub_);
+            sub_ = nullptr;
+        }
+    }
+    EventSubscription(const EventSubscription&) = delete;
+    EventSubscription& operator=(const EventSubscription&) = delete;
+    EventSubscription(EventSubscription&& other) noexcept : sub_(other.sub_) {
+        other.sub_ = nullptr;
+    }
+    EventSubscription& operator=(EventSubscription&& other) noexcept {
+        if (this != &other) {
+            if (sub_) neon3_event_subscription_free(sub_);
+            sub_ = other.sub_;
+            other.sub_ = nullptr;
+        }
+        return *this;
+    }
+
+    /// Block until one event envelope arrives; returns the event JSON
+    /// ({event_id, payload, ...} or the raw envelope).
+    std::string recv(uint64_t timeout_ms = 5000) {
+        char* error = nullptr;
+        char* event = nullptr;
+        int rc = neon3_event_recv(sub_, timeout_ms, &event, &error);
+        if (rc != NEON3_OK) {
+            std::string message = error ? error : "neon3 event recv error";
+            if (error) neon3_free_string(error);
+            throw Error(rc, message);
+        }
+        detail::Ptr<char> owned(event);
+        return std::string(owned.get() ? owned.get() : "");
+    }
+
+    neon3_event_subscription* nativeHandle() const noexcept { return sub_; }
+
+private:
+    neon3_event_subscription* sub_ = nullptr;
+};
+
 } // namespace neon3
 
 #endif // NEON3_CPP_SDK_HPP

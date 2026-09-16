@@ -175,6 +175,68 @@ class PointerEvent:
         return {"event_type": self.event_type, "surface_id": self.surface_id, "pixel": self.pixel, "delta": self.delta, "delta_mode": "pixel", "button": self.button, "buttons": [self.button] if self.button else [], "modifiers": list(self.modifiers), "pointer_id": self.pointer_id, "sequence": self.sequence, "generation": self.generation, "frame_sequence": self.frame_sequence, "timestamp_monotonic_ns": self.timestamp_monotonic_ns or time.monotonic_ns()}
 
 
+@dataclass(frozen=True)
+class ShaderParameter:
+    """A shader parameter declaration (``UiShaderParameter``). ``kind`` is one
+    of ``"f32"``, ``"vec2"``, ``"vec4"``, ``"color"``; ``default_value`` is a
+    number, a 2/4-component array, or a ``#RRGGBB[AA]`` color string."""
+
+    key: str
+    kind: str
+    default_value: Any = None
+    range: tuple[float, float] | None = None
+
+    def to_wire(self) -> dict[str, Any]:
+        wire: dict[str, Any] = {"key": self.key, "kind": self.kind}
+        if self.default_value is not None:
+            wire["default_value"] = self.default_value
+        if self.range is not None:
+            wire["range"] = list(self.range)
+        return wire
+
+
+@dataclass(frozen=True)
+class ShaderPackage:
+    """Bounded custom text-material package (``UiShaderPackage``). The runtime
+    re-computes the FNV-1a 64-bit digest, parses the WGSL with naga, and caches
+    the package for ``text_material`` / ``token_shader`` /
+    ``selection_shader`` bindings on NUI nodes."""
+
+    package_id: str
+    version: int
+    entry_point: str
+    fallback: str
+    source_text: str = ""
+    source_digest: str | None = None
+    parameters: tuple[ShaderParameter, ...] = ()
+
+    def to_wire(self) -> dict[str, Any]:
+        source_bytes = list(self.source_text.encode("utf-8"))
+        if not source_bytes or len(source_bytes) > 256 * 1024:
+            raise ValueError("shader source must be 1 B ..= 256 KiB of UTF-8")
+        digest = self.source_digest or shader_source_digest(self.source_text.encode("utf-8"))
+        return {
+            "package_id": self.package_id,
+            "version": self.version,
+            "source_digest": digest,
+            "source_bytes": source_bytes,
+            "entry_point": self.entry_point,
+            "fallback": self.fallback,
+            "parameters": [parameter.to_wire() for parameter in self.parameters],
+        }
+
+
+def shader_source_digest(source: str | bytes) -> str:
+    """Deterministic FNV-1a 64-bit fingerprint (hex) matching the runtime."""
+    if isinstance(source, str):
+        source = source.encode("utf-8")
+    digest = 0xCBF29CE484222325
+    for byte in source:
+        digest ^= byte
+        digest = (digest * 0x100000001B3) & 0xFFFFFFFFFFFFFFFF
+    return f"{digest:016x}"
+
+
 class RenderClient:
     """High-level wrapper for the WGPU runtime control-plane contract.
 
@@ -203,6 +265,18 @@ class RenderClient:
 
     def graph_snapshot(self) -> Any:
         return self.client.call(self.target, "wgpu.render.graph.snapshot").result
+
+    def register_shader(self, package: ShaderPackage) -> Any:
+        """Register a validated custom text-material package
+        (``wgpu.shader.register``). Register before mounting a Flow that
+        references the package; the runtime validates the digest and compiles
+        the WGSL, then answers ``{"status": "registered", ...}``."""
+        return self.client.call(self.target, rpc_method.WGPU_SHADER_REGISTER, {"package": package.to_wire()}).result
+
+    def shader_state(self) -> Any:
+        """Structured snapshot of every registered shader package
+        (``wgpu.shader.state``)."""
+        return self.client.call(self.target, rpc_method.WGPU_SHADER_STATE).result
 
     def capture(self, path: str, *, target: str = "ui.color.v1", redraw: bool = True) -> Any:
         return self.client.call(self.target, "wgpu.render.target.capture", {"target": target, "path": path, "redraw": redraw}).result

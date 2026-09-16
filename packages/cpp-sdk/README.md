@@ -44,6 +44,21 @@ int main() {
   client.animationSeek("hero.timeline", 0.5f);
   client.animationPause("hero.timeline");
 
+  // Headless editor documents (editor-runtime, v0.2.10+)
+  neon3::EditorClient editor(client);
+  editor.open("doc-1", "sess-1", flow, "nui_flow");
+  std::string snap = editor.snapshot("doc-1", "sess-1", 1);
+  const char* changeset = "{\"base_revision\":0,"
+                          "\"ops\":[{\"kind\":\"insert\",\"line\":2,\"column\":6,"
+                          "\"end\":{\"line\":2,\"column\":7},\"text\":\"!\"}]}";
+  editor.applyChange("doc-1", "sess-1", 1, changeset, "commit");
+  editor.completions("doc-1", "sess-1", 1, 1, 2, 6, "automatic");
+  editor.close("doc-1", "sess-1", 1);
+
+  // Eventd subscription (v0.2.7+): shader.event and other bus events
+  neon3::EventSubscription sub("127.0.0.1:39101", "shader.event");
+  // std::string evt = sub.recv(5000); // blocks until one frame arrives
+
   // Offscreen screenshot
   int64_t gen = client.openSurface("hello", 1280, 720);
   client.savePng("hello", "out.png");

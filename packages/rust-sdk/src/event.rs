@@ -65,6 +65,10 @@ impl ShaderEvent {
 /// A live subscription: one TCP connection to eventd, one filter.
 pub struct EventSubscription {
     reader: BufReader<TcpStream>,
+    // The writer half keeps the stream open and owns the socket; the recv
+    // path only reads. Split for future request/response use on the same
+    // subscription connection.
+    #[allow(dead_code)]
     writer: BufWriter<TcpStream>,
 }
 

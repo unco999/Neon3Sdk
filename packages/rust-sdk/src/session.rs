@@ -3,7 +3,7 @@
 //! `ui.input.frame` with strict input-revision bookkeeping.
 
 use crate::client::NeonClient;
-use crate::wire::{RpcFailure, RpcResponse};
+use crate::wire::RpcFailure;
 use serde::Deserialize;
 use serde_json::{Value, json};
 

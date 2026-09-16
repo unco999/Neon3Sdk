@@ -52,7 +52,7 @@ fn main() {
         depth: false,
         buffer_count: 2,
     };
-    let mut surface = match renderer.open_surface(&open) {
+    let surface = match renderer.open_surface(&open) {
         Ok(s) => s,
         Err(e) => { eprintln!("{{\"step\":\"render.surface.open\",\"ok\":false,\"error\":{e:?}}}"); std::process::exit(1); }
     };

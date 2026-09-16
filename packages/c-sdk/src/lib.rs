@@ -1,3 +1,5 @@
+#![allow(non_camel_case_types)]
+
 //! C ABI for the Neon3 control-plane protocol.
 //!
 //! Design rules:
@@ -134,6 +136,24 @@ pub unsafe extern "C" fn neon3_client_call(
     out_result: *mut *mut c_char,
     out_error: *mut *mut c_char,
 ) -> c_int {
+    unsafe { neon3_client_call_ex(client, target, method, params_json, std::ptr::null(), std::ptr::null(), out_result, out_error) }
+}
+
+/// Generic RPC with full envelope control (v0.2.10+). `idempotency_key` may be
+/// NULL; `expected_revision` may be NULL. Mutating editor.* methods require an
+/// idempotency key, and `editor.document.change.commit` requires
+/// `expected_revision`.
+#[no_mangle]
+pub unsafe extern "C" fn neon3_client_call_ex(
+    client: *mut neon3_client,
+    target: *const c_char,
+    method: *const c_char,
+    params_json: *const c_char,
+    idempotency_key: *const c_char,
+    expected_revision: *const u64,
+    out_result: *mut *mut c_char,
+    out_error: *mut *mut c_char,
+) -> c_int {
     let target = match unsafe { param_str(target) } {
         Ok(s) => s.to_owned(),
         Err(code) => return unsafe { fail(code, "target must be a C string", out_error) },
@@ -153,7 +173,22 @@ pub unsafe extern "C" fn neon3_client_call(
             Err(code) => return unsafe { fail(code, "params_json must be a C string", out_error) },
         }
     };
-    match with_client(client, |inner| inner.call(&target, &method, params).and_then(|r| r.ok().map_err(|f| f.to_string()))) {
+    let idempotency = if idempotency_key.is_null() {
+        None
+    } else {
+        match unsafe { param_str(idempotency_key) } {
+            Ok(s) => Some(s.to_owned()),
+            Err(code) => return unsafe { fail(code, "idempotency_key must be a C string", out_error) },
+        }
+    };
+    // SAFETY: caller guarantees the pointee stays alive for the call.
+    let expected = unsafe { expected_revision.as_ref() }.copied();
+    let result = with_client(client, |inner| {
+        inner
+            .call_full(&target, &method, params, idempotency.clone(), expected)
+            .and_then(|r| r.ok().map_err(|f| f.to_string()))
+    });
+    match result {
         Ok(result) => {
             let json = serde_json::to_string(&result).unwrap_or_else(|_| "null".into());
             unsafe { set_out(out_result, &json) };
@@ -307,6 +342,292 @@ pub unsafe extern "C" fn neon3_client_shutdown(
 /// Opaque event subscription handle: a long-lived eventd connection.
 pub struct neon3_event_subscription {
     sub: Mutex<neon3_sdk::EventSubscription>,
+}
+
+// -------------------------------------------------------------------------
+// v0.2.10+: editor document service (editor-runtime).
+// -------------------------------------------------------------------------
+
+const EDITOR_SERVICE: &str = "editor-runtime";
+
+// Canonical wire constants for the editor / shader surface. Values are kept
+// in sync with include/neon3.h so Rust-side code and the C header can never
+// drift: the same strings the wire contract defines.
+pub const NEON3_METHOD_EDITOR_DOCUMENT_OPEN: &str = "editor.document.open";
+pub const NEON3_METHOD_EDITOR_DOCUMENT_SNAPSHOT_GET: &str = "editor.document.snapshot.get";
+pub const NEON3_METHOD_EDITOR_DOCUMENT_CHANGE_APPLY: &str = "editor.document.change.apply";
+pub const NEON3_METHOD_EDITOR_CHANGE_COMMIT: &str = "editor.document.change.commit";
+pub const NEON3_METHOD_EDITOR_COMPLETION_REQUEST: &str = "editor.completion.request";
+pub const NEON3_METHOD_EDITOR_DOCUMENT_CLOSE: &str = "editor.document.close";
+pub const NEON3_METHOD_WGPU_SHADER_REGISTER: &str = "wgpu.shader.register";
+pub const NEON3_SEMANTIC_DOCUMENT_COMMIT: &str = "document_commit";
+
+/// Shared plumbing: run one editor-runtime RPC with the given envelope
+/// extras and hand the result JSON to `out_result`.
+fn editor_call(
+    client: *mut neon3_client,
+    method: &str,
+    params: serde_json::Value,
+    idempotency_key: Option<String>,
+    expected_revision: Option<u64>,
+    out_result: *mut *mut c_char,
+    out_error: *mut *mut c_char,
+) -> c_int {
+    let result = with_client(client, |inner| {
+        inner
+            .call_full(EDITOR_SERVICE, method, params, idempotency_key, expected_revision)
+            .and_then(|r| r.ok().map_err(|f| f.to_string()))
+    });
+    match result {
+        Ok(result) => {
+            let json = serde_json::to_string(&result).unwrap_or_else(|_| "null".into());
+            unsafe { set_out(out_result, &json) };
+            NEON3_OK
+        }
+        Err((code, message)) => unsafe { fail(code, &message, out_error) },
+    }
+}
+
+/// Validate the document/session identity pair shared by every editor call.
+fn editor_identity(
+    document_id: *const c_char,
+    session_id: *const c_char,
+    out_error: *mut *mut c_char,
+) -> Result<(String, String), c_int> {
+    let document = unsafe { param_str(document_id) }
+        .map_err(|code| unsafe { fail(code, "document_id must be a C string", out_error); code })?
+        .to_owned();
+    let session = unsafe { param_str(session_id) }
+        .map_err(|code| unsafe { fail(code, "session_id must be a C string", out_error); code })?
+        .to_owned();
+    if document.trim().is_empty() {
+        unsafe { fail(NEON3_ERR_INVALID_ARG, "document_id must be non-empty", out_error) };
+        return Err(NEON3_ERR_INVALID_ARG);
+    }
+    if session.trim().is_empty() {
+        unsafe { fail(NEON3_ERR_INVALID_ARG, "session_id must be non-empty", out_error) };
+        return Err(NEON3_ERR_INVALID_ARG);
+    }
+    Ok((document, session))
+}
+
+/// Open a document (`editor.document.open`). Mutating: an idempotency key is
+/// generated here.
+#[no_mangle]
+pub unsafe extern "C" fn neon3_editor_open(
+    client: *mut neon3_client,
+    document_id: *const c_char,
+    session_id: *const c_char,
+    source: *const c_char,
+    language: *const c_char,
+    out_result: *mut *mut c_char,
+    out_error: *mut *mut c_char,
+) -> c_int {
+    let (document, session) = match editor_identity(document_id, session_id, out_error) {
+        Ok(pair) => pair,
+        Err(code) => return code,
+    };
+    let source = match unsafe { param_str(source) } {
+        Ok(s) => s,
+        Err(code) => return unsafe { fail(code, "source must be a C string", out_error) },
+    };
+    let language = if language.is_null() { "nui_flow" } else {
+        match unsafe { param_str(language) } {
+            Ok(s) => s,
+            Err(code) => return unsafe { fail(code, "language must be a C string", out_error) },
+        }
+    };
+    if language != "nui_flow" {
+        return unsafe { fail(NEON3_ERR_INVALID_ARG, "language must be \"nui_flow\"", out_error) };
+    }
+    editor_call(
+        client,
+        "editor.document.open",
+        serde_json::json!({
+            "document_id": document,
+            "session_id": session,
+            "language": language,
+            "source": source,
+        }),
+        Some(format!("editor:open:{document}:{}", uuid::Uuid::new_v4())),
+        None,
+        out_result,
+        out_error,
+    )
+}
+
+/// Fetch the current document snapshot (`editor.document.snapshot.get`).
+#[no_mangle]
+pub unsafe extern "C" fn neon3_editor_snapshot(
+    client: *mut neon3_client,
+    document_id: *const c_char,
+    session_id: *const c_char,
+    epoch: u64,
+    out_result: *mut *mut c_char,
+    out_error: *mut *mut c_char,
+) -> c_int {
+    let (document, session) = match editor_identity(document_id, session_id, out_error) {
+        Ok(pair) => pair,
+        Err(code) => return code,
+    };
+    editor_call(
+        client,
+        "editor.document.snapshot.get",
+        serde_json::json!({"document_id": document, "session_id": session, "epoch": epoch}),
+        None,
+        None,
+        out_result,
+        out_error,
+    )
+}
+
+/// Apply a change set (`editor.document.change.apply`). `changeset_json`
+/// holds `{"base_revision": u64, "ops": [...]}`; `kind` is `"draft"` or
+/// `"commit"`. Mutating: an idempotency key is generated here.
+#[no_mangle]
+pub unsafe extern "C" fn neon3_editor_apply(
+    client: *mut neon3_client,
+    document_id: *const c_char,
+    session_id: *const c_char,
+    epoch: u64,
+    changeset_json: *const c_char,
+    kind: *const c_char,
+    out_result: *mut *mut c_char,
+    out_error: *mut *mut c_char,
+) -> c_int {
+    let (document, session) = match editor_identity(document_id, session_id, out_error) {
+        Ok(pair) => pair,
+        Err(code) => return code,
+    };
+    let changeset = match unsafe { param_str(changeset_json) } {
+        Ok(s) => match serde_json::from_str::<serde_json::Value>(s) {
+            Ok(v) => v,
+            Err(_) => return unsafe { fail(NEON3_ERR_INVALID_ARG, "changeset_json must be valid JSON", out_error) },
+        },
+        Err(code) => return unsafe { fail(code, "changeset_json must be a C string", out_error) },
+    };
+    let kind = match unsafe { param_str(kind) } {
+        Ok(s) => s,
+        Err(code) => return unsafe { fail(code, "kind must be a C string", out_error) },
+    };
+    if kind != "draft" && kind != "commit" {
+        return unsafe { fail(NEON3_ERR_INVALID_ARG, "kind must be \"draft\" or \"commit\"", out_error) };
+    }
+    editor_call(
+        client,
+        "editor.document.change.apply",
+        serde_json::json!({
+            "document_id": document,
+            "session_id": session,
+            "epoch": epoch,
+            "change_set": changeset,
+            "kind": kind,
+        }),
+        Some(format!("editor:apply:{document}:{}", uuid::Uuid::new_v4())),
+        None,
+        out_result,
+        out_error,
+    )
+}
+
+/// Commit the pending revision (`editor.document.change.commit`). The
+/// envelope carries `expected_revision`.
+#[no_mangle]
+pub unsafe extern "C" fn neon3_editor_commit(
+    client: *mut neon3_client,
+    document_id: *const c_char,
+    session_id: *const c_char,
+    epoch: u64,
+    expected_revision: u64,
+    out_result: *mut *mut c_char,
+    out_error: *mut *mut c_char,
+) -> c_int {
+    let (document, session) = match editor_identity(document_id, session_id, out_error) {
+        Ok(pair) => pair,
+        Err(code) => return code,
+    };
+    editor_call(
+        client,
+        "editor.document.change.commit",
+        serde_json::json!({"document_id": document, "session_id": session, "epoch": epoch}),
+        Some(format!("editor:commit:{document}:{}", uuid::Uuid::new_v4())),
+        Some(expected_revision),
+        out_result,
+        out_error,
+    )
+}
+
+/// Request completion candidates (`editor.completion.request`).
+/// `trigger_kind` is `"automatic"`, `"invoked"`, or `"trigger_character"`.
+#[no_mangle]
+pub unsafe extern "C" fn neon3_editor_completions(
+    client: *mut neon3_client,
+    document_id: *const c_char,
+    session_id: *const c_char,
+    epoch: u64,
+    document_revision: u64,
+    line: u32,
+    column: u32,
+    trigger_kind: *const c_char,
+    out_result: *mut *mut c_char,
+    out_error: *mut *mut c_char,
+) -> c_int {
+    let (document, session) = match editor_identity(document_id, session_id, out_error) {
+        Ok(pair) => pair,
+        Err(code) => return code,
+    };
+    let trigger = if trigger_kind.is_null() { "automatic" } else {
+        match unsafe { param_str(trigger_kind) } {
+            Ok(s) => s,
+            Err(code) => return unsafe { fail(code, "trigger_kind must be a C string", out_error) },
+        }
+    };
+    match trigger {
+        "automatic" | "invoked" | "trigger_character" => {}
+        other => return unsafe { fail(NEON3_ERR_INVALID_ARG, &format!("invalid trigger_kind {other:?}"), out_error) },
+    }
+    editor_call(
+        client,
+        "editor.completion.request",
+        serde_json::json!({
+            "document_id": document,
+            "session_id": session,
+            "epoch": epoch,
+            "document_revision": document_revision,
+            "position": {"line": line, "column": column},
+            "trigger_kind": trigger,
+        }),
+        None,
+        None,
+        out_result,
+        out_error,
+    )
+}
+
+/// Close a document (`editor.document.close`). Mutating: an idempotency key
+/// is generated here.
+#[no_mangle]
+pub unsafe extern "C" fn neon3_editor_close(
+    client: *mut neon3_client,
+    document_id: *const c_char,
+    session_id: *const c_char,
+    epoch: u64,
+    out_result: *mut *mut c_char,
+    out_error: *mut *mut c_char,
+) -> c_int {
+    let (document, session) = match editor_identity(document_id, session_id, out_error) {
+        Ok(pair) => pair,
+        Err(code) => return code,
+    };
+    editor_call(
+        client,
+        "editor.document.close",
+        serde_json::json!({"document_id": document, "session_id": session, "epoch": epoch}),
+        Some(format!("editor:close:{document}:{}", uuid::Uuid::new_v4())),
+        None,
+        out_result,
+        out_error,
+    )
 }
 
 /// Upload 10 rows of vec4 to the shader's view.extras[0..9] uniform
@@ -495,5 +816,18 @@ mod tests {
     fn error_codes_are_stable() {
         assert_eq!(NEON3_OK, 0);
         assert_eq!(NEON3_ERR_NULL_POINTER, 7);
+    }
+
+    #[test]
+    fn editor_method_strings_match_the_wire_contract() {
+        assert_eq!(EDITOR_SERVICE, "editor-runtime");
+        assert_eq!(NEON3_METHOD_EDITOR_DOCUMENT_OPEN, "editor.document.open");
+        assert_eq!(NEON3_METHOD_EDITOR_DOCUMENT_SNAPSHOT_GET, "editor.document.snapshot.get");
+        assert_eq!(NEON3_METHOD_EDITOR_DOCUMENT_CHANGE_APPLY, "editor.document.change.apply");
+        assert_eq!(NEON3_METHOD_EDITOR_CHANGE_COMMIT, "editor.document.change.commit");
+        assert_eq!(NEON3_METHOD_EDITOR_COMPLETION_REQUEST, "editor.completion.request");
+        assert_eq!(NEON3_METHOD_EDITOR_DOCUMENT_CLOSE, "editor.document.close");
+        assert_eq!(NEON3_METHOD_WGPU_SHADER_REGISTER, "wgpu.shader.register");
+        assert_eq!(NEON3_SEMANTIC_DOCUMENT_COMMIT, "document_commit");
     }
 }

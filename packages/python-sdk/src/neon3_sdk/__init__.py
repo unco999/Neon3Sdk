@@ -47,13 +47,35 @@ from .models import (
 )
 from .nui import ComponentGallery, GallerySubmission
 from .input import InputClient, KeyEvent
-from .render import Backend, BackendNegotiation, Camera3D, ColorSpace, ExternalSurface, PointerEvent, RenderClient, SurfaceKind, SurfaceOpen, SurfaceSize, SurfaceTarget, WorldInformation, WorldPlacement
+from .render import Backend, BackendNegotiation, Camera3D, ColorSpace, ExternalSurface, PointerEvent, RenderClient, ShaderPackage, ShaderParameter, SurfaceKind, SurfaceOpen, SurfaceSize, SurfaceTarget, WorldInformation, WorldPlacement, shader_source_digest
 from .routing import DragSource, DropTarget, IntentRouter
 from .runtime import RuntimeConfig, RuntimeEndpoints, RuntimeMode, RuntimeSession, default_neon_root, runtime_version
 from .session import IntentResult, UiSession
 from .store import CollectionStore, ObservableStore, ScalarStore, SelectionStore, typed_value
 from .ui import UiClient, UiProgram
 from .event import EventClient, EventFilter, EventSubscription, ShaderEvent
+from .editor import (
+    ChangeSet,
+    CompletionItem,
+    CompletionTriggerKind,
+    EDITOR_CHANGE_COMMIT,
+    EDITOR_CHANGE_DRAFT,
+    EDITOR_LANGUAGE_NUI_FLOW,
+    COMPLETION_AUTOMATIC,
+    COMPLETION_INVOKED,
+    COMPLETION_TRIGGER_CHARACTER,
+    MAX_CHANGESET_OPS,
+    MAX_INSERT_BYTES,
+    EditOp,
+    EditorChangeKind,
+    EditorClient,
+    EditorCompletionResult,
+    EditorOpenResult,
+    EditorOperationResult,
+    EditorPosition,
+    EditorSelection,
+    EditorSnapshot,
+)
 from .wire import CORE_ERROR_CODES, canonical_json, fixture_path, load_fixture
 
 __all__ = [
@@ -80,6 +102,9 @@ __all__ = [
     "ComponentGallery",
     "CORE_ERROR_CODES",
     "DebugSnapshot",
+    "ChangeSet",
+    "CompletionItem",
+    "CompletionTriggerKind",
     "DragSource",
     "DragSpec",
     "DropEvent",
@@ -89,6 +114,23 @@ __all__ = [
     "DuplicateEventError",
     "FlowValidationError",
     "GallerySubmission",
+    "EditOp",
+    "EditorChangeKind",
+    "EditorClient",
+    "EditorCompletionResult",
+    "EditorOpenResult",
+    "EditorOperationResult",
+    "EditorPosition",
+    "EditorSelection",
+    "EditorSnapshot",
+    "EDITOR_CHANGE_COMMIT",
+    "EDITOR_CHANGE_DRAFT",
+    "EDITOR_LANGUAGE_NUI_FLOW",
+    "COMPLETION_AUTOMATIC",
+    "COMPLETION_INVOKED",
+    "COMPLETION_TRIGGER_CHARACTER",
+    "MAX_CHANGESET_OPS",
+    "MAX_INSERT_BYTES",
     "IntentEvent",
     "IntentResult",
     "IntentRouter",
@@ -117,6 +159,9 @@ __all__ = [
     "ServiceDescription",
     "ServiceHealth",
     "ShaderEvent",
+    "ShaderPackage",
+    "ShaderParameter",
+    "shader_source_digest",
     "StaleRevisionError",
     "SurfaceKind",
     "SurfaceOpen",

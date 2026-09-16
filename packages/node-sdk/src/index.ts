@@ -2,6 +2,7 @@ export * from "./capabilities.js";
 export * from "./client.js";
 export * from "./components.js";
 export * from "./constants.js";
+export * from "./editor.js";
 export * from "./errors.js";
 export * from "./event.js";
 export * from "./facade.js";

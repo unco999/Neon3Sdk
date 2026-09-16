@@ -16,6 +16,10 @@ pub mod service {
     pub const UI_RUNTIME: &str = "ui-runtime";
     /// WGPU renderer. Default endpoint 127.0.0.1:39103.
     pub const WGPU_RUNTIME: &str = "wgpu-runtime";
+    /// Headless editor document service backing the NUI `code_editor`
+    /// component (v0.2.10+). Serves the `editor.document.v1`,
+    /// `editor.changeset.v1`, and `editor.completion.v1` capabilities.
+    pub const EDITOR_RUNTIME: &str = "editor-runtime";
 }
 
 /// RPC method names, grouped by the service that answers them.
@@ -50,6 +54,18 @@ pub mod method {
 
     // --- wgpu-runtime: v0.2.10 animation timeline control ---
     pub const WGPU_UI_ANIMATION_PREFIX: &str = "wgpu.ui.animation.";
+
+    // --- wgpu-runtime: custom text material packages ---
+    pub const WGPU_SHADER_REGISTER: &str = "wgpu.shader.register";
+    pub const WGPU_SHADER_STATE: &str = "wgpu.shader.state";
+
+    // --- editor-runtime: code_editor document service (v0.2.10+) ---
+    pub const EDITOR_DOCUMENT_OPEN: &str = "editor.document.open";
+    pub const EDITOR_DOCUMENT_SNAPSHOT_GET: &str = "editor.document.snapshot.get";
+    pub const EDITOR_DOCUMENT_CHANGE_APPLY: &str = "editor.document.change.apply";
+    pub const EDITOR_DOCUMENT_CHANGE_COMMIT: &str = "editor.document.change.commit";
+    pub const EDITOR_COMPLETION_REQUEST: &str = "editor.completion.request";
+    pub const EDITOR_DOCUMENT_CLOSE: &str = "editor.document.close";
 }
 
 /// Event names published on eventd.
@@ -62,6 +78,11 @@ pub mod event_name {
     /// Blank-area click (v0.2.9). Carries vec2 coordinates in the semantic
     /// intent payload; used for outside-click dismissal.
     pub const UI_CLICK_BLANK: &str = "ui.click_blank";
+    /// Semantic event kind emitted when a NUI `code_editor` node commits its
+    /// document (v0.2.10+). Arrives over `ui.host.inbound` with the full
+    /// document text in the `text.value` payload; the node's `event` clause
+    /// names the intent action (e.g. `editor.commit`).
+    pub const DOCUMENT_COMMIT: &str = "document_commit";
 }
 
 /// Rendered surface kind (NUI `kind` field).

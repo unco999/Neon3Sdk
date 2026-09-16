@@ -21,6 +21,10 @@ export const service = {
   UI_RUNTIME: "ui-runtime",
   /** WGPU renderer. Default endpoint 127.0.0.1:39103. */
   WGPU_RUNTIME: "wgpu-runtime",
+  /** Headless editor document service backing the NUI `code_editor`
+   * component (v0.2.10+). Serves the `editor.document.v1`,
+   * `editor.changeset.v1`, and `editor.completion.v1` capabilities. */
+  EDITOR_RUNTIME: "editor-runtime",
 } as const;
 
 /** RPC method names. */
@@ -55,6 +59,18 @@ export const method = {
 
   // v0.2.10 animation
   WGPU_UI_ANIMATION_PREFIX: "wgpu.ui.animation.",
+
+  // wgpu-runtime: custom text material packages
+  WGPU_SHADER_REGISTER: "wgpu.shader.register",
+  WGPU_SHADER_STATE: "wgpu.shader.state",
+
+  // editor-runtime: code_editor document service (v0.2.10+)
+  EDITOR_DOCUMENT_OPEN: "editor.document.open",
+  EDITOR_DOCUMENT_SNAPSHOT_GET: "editor.document.snapshot.get",
+  EDITOR_DOCUMENT_CHANGE_APPLY: "editor.document.change.apply",
+  EDITOR_DOCUMENT_CHANGE_COMMIT: "editor.document.change.commit",
+  EDITOR_COMPLETION_REQUEST: "editor.completion.request",
+  EDITOR_DOCUMENT_CLOSE: "editor.document.close",
 } as const;
 
 /** Event names published on eventd. */
@@ -65,6 +81,11 @@ export const eventName = {
   UI_FILE_DROP_ACCEPTED: "ui.file_drop.accepted",
   /** Blank-area click (v0.2.9). */
   UI_CLICK_BLANK: "ui.click_blank",
+  /** Semantic event kind emitted when a NUI `code_editor` node commits its
+   * document (v0.2.10+). Arrives over `ui.host.inbound` with the full
+   * document text in the `text.value` payload; the node's `event` clause
+   * names the intent action (e.g. `editor.commit`). */
+  DOCUMENT_COMMIT: "document_commit",
 } as const;
 
 /** Animation control action (v0.2.10). */

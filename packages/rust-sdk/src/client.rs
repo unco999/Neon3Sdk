@@ -94,7 +94,8 @@ impl NeonClient {
 
     /// Perform one framed RPC with an explicit envelope-level idempotency key.
     /// Required by methods the runtime deduplicates (e.g.
-    /// `wgpu.ui.animation.*`); the plain `call` leaves the field null.
+    /// `wgpu.ui.animation.*`, `editor.document.*` mutations); the plain `call`
+    /// leaves the field null.
     pub fn call_with_idempotency(
         &mut self,
         target: &str,
@@ -102,8 +103,24 @@ impl NeonClient {
         params: Value,
         idempotency_key: Option<String>,
     ) -> Result<RpcResponse, String> {
+        self.call_full(target, method, params, idempotency_key, None)
+    }
+
+    /// Perform one framed RPC with full envelope control. `expected_revision`
+    /// is required by `editor.document.change.commit` (optimistic concurrency
+    /// on the document revision); `idempotency_key` by every mutating editor
+    /// method.
+    pub fn call_full(
+        &mut self,
+        target: &str,
+        method: &str,
+        params: Value,
+        idempotency_key: Option<String>,
+        expected_revision: Option<u64>,
+    ) -> Result<RpcResponse, String> {
         let mut request = RpcRequest::new(target, method, params, self.identity());
         request.idempotency_key = idempotency_key;
+        request.expected_revision = expected_revision;
         write_frame(&mut self.writer, &serde_json::to_value(&request).map_err(|e| e.to_string())?)
             .map_err(|e| format!("write request: {e}"))?;
         self.writer.flush().map_err(|e| format!("flush request: {e}"))?;

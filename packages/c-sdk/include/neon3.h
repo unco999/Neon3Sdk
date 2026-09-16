@@ -52,6 +52,7 @@ enum {
 #define NEON3_SERVICE_EVENTD        "eventd"
 #define NEON3_SERVICE_UI_RUNTIME    "ui-runtime"
 #define NEON3_SERVICE_WGPU_RUNTIME   "wgpu-runtime"
+#define NEON3_SERVICE_EDITOR_RUNTIME "editor-runtime"
 
 /* RPC method names. */
 #define NEON3_METHOD_SERVICE_HEALTH              "service.health"
@@ -67,11 +68,25 @@ enum {
 #define NEON3_METHOD_RENDER_SURFACE_CAPTURE_PNG   "render.surface.capture_png"
 #define NEON3_METHOD_WGPU_SET_VIEW_EXTRAS        "wgpu.ui.set_view_extras"
 #define NEON3_METHOD_WGPU_ANIMATION_PREFIX        "wgpu.ui.animation."
+#define NEON3_METHOD_WGPU_SHADER_REGISTER         "wgpu.shader.register"
+#define NEON3_METHOD_WGPU_SHADER_STATE            "wgpu.shader.state"
+
+/* editor-runtime: code_editor document service (v0.2.10+). */
+#define NEON3_METHOD_EDITOR_DOCUMENT_OPEN          "editor.document.open"
+#define NEON3_METHOD_EDITOR_DOCUMENT_SNAPSHOT_GET  "editor.document.snapshot.get"
+#define NEON3_METHOD_EDITOR_DOCUMENT_CHANGE_APPLY  "editor.document.change.apply"
+#define NEON3_METHOD_EDITOR_CHANGE_COMMIT          "editor.document.change.commit"
+#define NEON3_METHOD_EDITOR_COMPLETION_REQUEST     "editor.completion.request"
+#define NEON3_METHOD_EDITOR_DOCUMENT_CLOSE         "editor.document.close"
 
 /* Event names on eventd. */
 #define NEON3_EVENT_SHADER_EVENT       "shader.event"
 #define NEON3_EVENT_FILE_DROP_ACCEPTED "ui.file_drop.accepted"
 #define NEON3_EVENT_CLICK_BLANK       "ui.click_blank"
+
+/* Semantic event kind for NUI code_editor commits (arrives over
+ * ui.host.inbound, not eventd). */
+#define NEON3_SEMANTIC_DOCUMENT_COMMIT "document_commit"
 
 /* Create a client. endpoint is "host:port"; allow_non_loopback relaxes the
  * default loopback-only policy. Returns 0 on success. */
@@ -90,6 +105,16 @@ NEON3_API void neon3_free_string(char* value);
 NEON3_API int neon3_client_call(neon3_client* client, const char* target,
                                 const char* method, const char* params_json,
                                 char** out_result, char** out_error);
+
+/* Generic RPC with full envelope control (v0.2.10+). idempotency_key may be
+ * NULL; expected_revision may be NULL. Mutating editor.* methods require an
+ * idempotency key, and editor.document.change.commit requires
+ * expected_revision. */
+NEON3_API int neon3_client_call_ex(neon3_client* client, const char* target,
+                                   const char* method, const char* params_json,
+                                   const char* idempotency_key,
+                                   const int64_t* expected_revision,
+                                   char** out_result, char** out_error);
 
 /* Health probe: sets *out_healthy to 1 when the target is healthy. */
 NEON3_API int neon3_client_health(neon3_client* client, const char* target,
@@ -146,6 +171,60 @@ NEON3_API int neon3_animation_cancel(neon3_client* client,
 NEON3_API int neon3_animation_seek(neon3_client* client,
                                    const char* node_path, float progress,
                                    char** out_error);
+
+/* -------------------------------------------------------------------------
+ * v0.2.10+: editor document service (editor-runtime), backing the NUI
+ * code_editor component. All functions answer with result JSON through
+ * out_* (free with neon3_free_string).
+ * ------------------------------------------------------------------------- */
+
+/* Open a document (editor.document.open). language must be "nui_flow".
+ * out_result holds {"state": "opened"|"already_open", "snapshot": ...}. */
+NEON3_API int neon3_editor_open(neon3_client* client,
+                                const char* document_id, const char* session_id,
+                                const char* source, const char* language,
+                                char** out_result, char** out_error);
+
+/* Fetch the current document snapshot (editor.document.snapshot.get).
+ * out_result holds {"state": "ready", "snapshot": ...}. */
+NEON3_API int neon3_editor_snapshot(neon3_client* client,
+                                    const char* document_id,
+                                    const char* session_id, uint64_t epoch,
+                                    char** out_result, char** out_error);
+
+/* Apply a change set (editor.document.change.apply). changeset_json holds
+ * {"base_revision": u64, "ops": [...]} with ops tagged kind insert/delete.
+ * kind is "draft" or "commit". out_result holds the operation result. */
+NEON3_API int neon3_editor_apply(neon3_client* client,
+                                 const char* document_id,
+                                 const char* session_id, uint64_t epoch,
+                                 const char* changeset_json, const char* kind,
+                                 char** out_result, char** out_error);
+
+/* Commit the pending revision (editor.document.change.commit). The envelope
+ * carries expected_revision; a stale value is rejected with
+ * editor_revision_conflict. out_result holds {"state": "committed", ...}. */
+NEON3_API int neon3_editor_commit(neon3_client* client,
+                                  const char* document_id,
+                                  const char* session_id, uint64_t epoch,
+                                  uint64_t expected_revision,
+                                  char** out_result, char** out_error);
+
+/* Request completion candidates (editor.completion.request).
+ * trigger_kind is "automatic", "invoked", or "trigger_character". */
+NEON3_API int neon3_editor_completions(neon3_client* client,
+                                       const char* document_id,
+                                       const char* session_id, uint64_t epoch,
+                                       uint64_t document_revision,
+                                       uint32_t line, uint32_t column,
+                                       const char* trigger_kind,
+                                       char** out_result, char** out_error);
+
+/* Close a document (editor.document.close). */
+NEON3_API int neon3_editor_close(neon3_client* client,
+                                 const char* document_id,
+                                 const char* session_id, uint64_t epoch,
+                                 char** out_result, char** out_error);
 
 /* -------------------------------------------------------------------------
  * v0.2.7: eventd subscription (for shader.event and other bus events).

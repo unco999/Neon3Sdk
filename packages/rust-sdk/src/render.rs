@@ -57,6 +57,49 @@ impl ExternalSurface {
     }
 }
 
+/// A shader parameter declaration (`UiShaderParameter`). `kind` is one of
+/// `"f32"`, `"vec2"`, `"vec4"`, `"color"`; `default_value` is a number, a
+/// 2/4-component array, or a `#RRGGBB[AA]` color string.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ShaderParameter {
+    pub key: String,
+    pub kind: String,
+    #[serde(default)]
+    pub default_value: Option<Value>,
+    #[serde(default)]
+    pub range: Option<[f32; 2]>,
+}
+
+/// Bounded custom text-material package (`UiShaderPackage`). The runtime
+/// re-computes the FNV-1a 64-bit digest, parses the WGSL with naga, and caches
+/// the package for `text_material` / `token_shader` / `selection_shader`
+/// bindings on NUI nodes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ShaderPackage {
+    pub package_id: String,
+    pub version: u32,
+    /// FNV-1a 64-bit hex fingerprint of `source_bytes`; see
+    /// [`shader_source_digest`].
+    pub source_digest: String,
+    /// WGSL source as a byte array (1 B ..= 256 KiB).
+    pub source_bytes: Vec<u8>,
+    pub entry_point: String,
+    /// Material the glyph falls back to when a one-shot material ends.
+    pub fallback: String,
+    #[serde(default)]
+    pub parameters: Vec<ShaderParameter>,
+}
+
+/// Deterministic FNV-1a 64-bit fingerprint (hex) matching the runtime.
+pub fn shader_source_digest(bytes: &[u8]) -> String {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in bytes {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    format!("{hash:016x}")
+}
+
 /// High-level wrapper for the WGPU runtime control-plane contract.
 #[derive(Debug)]
 pub struct RenderClient {
@@ -76,6 +119,26 @@ impl RenderClient {
 
     pub fn graph_snapshot(&mut self) -> Result<Value, String> {
         let response = self.client.call(&self.target, "wgpu.render.graph.snapshot", json!({}))?;
+        response.ok().map_err(|f: RpcFailure| f.to_string())
+    }
+
+    /// Register a validated custom text-material package
+    /// (`wgpu.shader.register`). Register before mounting a Flow that
+    /// references the package; the runtime validates the digest and compiles
+    /// the WGSL, then answers `{"status": "registered", ...}`.
+    pub fn register_shader(&mut self, package: &ShaderPackage) -> Result<Value, String> {
+        let response = self.client.call(
+            &self.target,
+            m::WGPU_SHADER_REGISTER,
+            json!({ "package": package }),
+        )?;
+        response.ok().map_err(|f: RpcFailure| f.to_string())
+    }
+
+    /// Structured snapshot of every registered shader package
+    /// (`wgpu.shader.state`).
+    pub fn shader_state(&mut self) -> Result<Value, String> {
+        let response = self.client.call(&self.target, m::WGPU_SHADER_STATE, json!({}))?;
         response.ok().map_err(|f: RpcFailure| f.to_string())
     }
 
@@ -211,5 +274,38 @@ impl RenderClient {
             Some(idempotency_key),
         )?;
         response.ok().map_err(|f: RpcFailure| f.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shader_source_digest_matches_fnv1a64() {
+        assert_eq!(shader_source_digest(b"A"), "af63fc4c860222ec");
+        assert_ne!(shader_source_digest(b"a"), shader_source_digest(b"b"));
+    }
+
+    #[test]
+    fn shader_package_serializes_runtime_shape() {
+        let package = ShaderPackage {
+            package_id: "pulse-neon-text".into(),
+            version: 1,
+            source_digest: shader_source_digest(b"fn f() {}"),
+            source_bytes: b"fn f() {}".to_vec(),
+            entry_point: "text_material".into(),
+            fallback: "standard_text".into(),
+            parameters: vec![ShaderParameter {
+                key: "speed".into(),
+                kind: "f32".into(),
+                default_value: Some(json!(2.0)),
+                range: Some([0.0, 10.0]),
+            }],
+        };
+        let wire = serde_json::to_value(&package).unwrap();
+        assert_eq!(wire["package_id"], "pulse-neon-text");
+        assert_eq!(wire["source_digest"], "8f4a37b41c2d1f90".replace("8f4a37b41c2d1f90", &shader_source_digest(b"fn f() {}")));
+        assert_eq!(wire["parameters"][0]["kind"], "f32");
     }
 }

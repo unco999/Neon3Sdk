@@ -7,6 +7,7 @@
 pub mod android;
 pub mod client;
 pub mod constants;
+pub mod editor;
 pub mod error;
 pub mod event;
 pub mod facade;
@@ -16,7 +17,12 @@ pub mod wire;
 
 pub use android::{ANDROID_HOST_ENDPOINT, ANDROID_HOST_PORT, AndroidConfig, AndroidSession, AndroidSessionHandle};
 pub use client::{ClientOptions, NeonClient};
+pub use editor::{
+    ChangeSet, CompletionItem, CompletionTriggerKind, EditorChangeKind, EditorClient, EditorCompletionResult,
+    EditorOpenResult, EditorOperationResult, EditorPosition, EditorSelection, EditorSnapshot, EditOp,
+    EDITOR_LANGUAGE_NUI_FLOW, MAX_CHANGESET_OPS, MAX_INSERT_BYTES,
+};
 pub use event::{EventClient, EventEnvelope, EventSubscription, ShaderEvent};
-pub use render::{ExternalSurface, RenderClient, SurfaceKind, SurfaceOpen, SurfaceSize};
+pub use render::{ExternalSurface, RenderClient, ShaderPackage, ShaderParameter, SurfaceKind, SurfaceOpen, SurfaceSize, shader_source_digest};
 pub use session::{IntentResult, PublishResult, UiProgram, UiProgramRevision, UiSession, UiTarget};
 pub use wire::{ClientIdentity, RpcError, RpcFailure, RpcRequest, RpcResponse, Version};
