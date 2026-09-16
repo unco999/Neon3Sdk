@@ -74,6 +74,8 @@ pub mod method {
     pub const EDITOR_LSP_REFERENCES: &str = "editor.lsp.references";
     pub const EDITOR_LSP_SYMBOLS: &str = "editor.lsp.symbols";
     pub const EDITOR_LSP_SIGNATURE_HELP: &str = "editor.lsp.signature_help";
+    pub const EDITOR_LSP_CONFIGURE: &str = "editor.lsp.configure";
+    pub const EDITOR_LANGUAGE_CAPABILITIES: &str = "editor.language.capabilities";
 }
 
 /// Event names published on eventd.

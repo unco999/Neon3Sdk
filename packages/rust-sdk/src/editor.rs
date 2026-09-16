@@ -315,6 +315,12 @@ pub struct EditorLspRawResult {
     pub result: Value,
 }
 
+/// Request wire shape for `editor.language.capabilities`.
+#[derive(Debug, Clone, Serialize)]
+pub struct EditorLanguageRef {
+    pub language: String,
+}
+
 /// Request wire shape for `editor.lsp.diagnostics` / `editor.lsp.symbols`.
 /// Mirrors `neon-editor-runtime::EditorLspRef`.
 #[derive(Debug, Clone, Serialize)]
@@ -323,6 +329,73 @@ pub struct EditorLspRef {
     pub session_id: String,
     pub epoch: u64,
     pub document_revision: u64,
+}
+
+/// Request wire shape for `editor.lsp.configure`: merge fields over the
+/// current server launch config for a language. Mirrors
+/// `neon-editor-runtime::EditorLspConfigure`.
+#[derive(Debug, Clone, Serialize)]
+pub struct EditorLspConfigure {
+    pub language: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub args: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub env: Option<std::collections::HashMap<String, String>>,
+}
+
+impl EditorLspConfigure {
+    pub fn new(language: impl Into<String>) -> Self {
+        Self {
+            language: language.into(),
+            command: None,
+            args: None,
+            env: None,
+        }
+    }
+
+    pub fn command(mut self, command: impl Into<String>) -> Self {
+        self.command = Some(command.into());
+        self
+    }
+
+    pub fn args(mut self, args: Vec<String>) -> Self {
+        self.args = Some(args);
+        self
+    }
+
+    pub fn env(mut self, env: std::collections::HashMap<String, String>) -> Self {
+        self.env = Some(env);
+        self
+    }
+}
+
+/// Result of `editor.lsp.configure`.
+#[derive(Debug, Clone, Deserialize)]
+pub struct EditorLspConfigureResult {
+    pub language: String,
+    pub state: String,
+}
+
+/// The active LSP server launch config reported by
+/// `editor.language.capabilities`.
+#[derive(Debug, Clone, Deserialize)]
+pub struct EditorLspServerInfo {
+    pub command: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub env: std::collections::HashMap<String, String>,
+}
+
+/// Result of `editor.language.capabilities`.
+#[derive(Debug, Clone, Deserialize)]
+pub struct EditorLanguageCapabilitiesResult {
+    pub language: String,
+    pub syntax_highlight: bool,
+    #[serde(default)]
+    pub lsp_server: Option<EditorLspServerInfo>,
 }
 
 /// Request wire shape for position-scoped LSP methods.
@@ -641,6 +714,45 @@ impl EditorClient {
             document_revision,
             position,
         )
+    }
+
+    /// Configure the language-server launch command for a language
+    /// (`editor.lsp.configure`). Fields are merged over the current config,
+    /// so a later call can change just the executable or just the args.
+    pub fn lsp_configure(
+        &mut self,
+        configure: EditorLspConfigure,
+    ) -> Result<EditorLspConfigureResult, String> {
+        if configure.language.trim().is_empty() {
+            return Err("language is required".into());
+        }
+        let result = self.ok(
+            m::EDITOR_LSP_CONFIGURE,
+            serde_json::to_value(configure).map_err(|e| e.to_string())?,
+        )?;
+        serde_json::from_value(result)
+            .map_err(|e| format!("decode {} result: {e}", m::EDITOR_LSP_CONFIGURE))
+    }
+
+    /// Query what the process can do for one language right now
+    /// (`editor.language.capabilities`): syntax highlighting availability
+    /// and the active LSP server config.
+    pub fn language_capabilities(
+        &mut self,
+        language: &str,
+    ) -> Result<EditorLanguageCapabilitiesResult, String> {
+        if language.trim().is_empty() {
+            return Err("language is required".into());
+        }
+        let result = self.ok(
+            m::EDITOR_LANGUAGE_CAPABILITIES,
+            serde_json::to_value(EditorLanguageRef {
+                language: language.into(),
+            })
+            .map_err(|e| e.to_string())?,
+        )?;
+        serde_json::from_value(result)
+            .map_err(|e| format!("decode {} result: {e}", m::EDITOR_LANGUAGE_CAPABILITIES))
     }
 
     fn lsp_position_call(
