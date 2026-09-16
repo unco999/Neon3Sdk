@@ -15,6 +15,20 @@ use serde_json::{Value, json};
 
 /// The only editor language the runtime supports today.
 pub const EDITOR_LANGUAGE_NUI_FLOW: &str = "nui_flow";
+/// TypeScript / TSX documents (tree-sitter tokenize + LSP when available).
+pub const EDITOR_LANGUAGE_TYPESCRIPT: &str = "typescript";
+/// Rust documents (tree-sitter tokenize + LSP when available).
+pub const EDITOR_LANGUAGE_RUST: &str = "rust";
+/// C / C++ documents (tree-sitter tokenize + LSP when available).
+pub const EDITOR_LANGUAGE_CPP: &str = "cpp";
+
+/// Every language the editor runtime accepts.
+pub const EDITOR_LANGUAGES: [&str; 4] = [
+    EDITOR_LANGUAGE_NUI_FLOW,
+    EDITOR_LANGUAGE_TYPESCRIPT,
+    EDITOR_LANGUAGE_RUST,
+    EDITOR_LANGUAGE_CPP,
+];
 
 /// Mirrors `MAX_CHANGESET_OPS` in `neon-editor-runtime`.
 pub const MAX_CHANGESET_OPS: usize = 256;
@@ -217,6 +231,111 @@ pub struct EditorOperationResult {
     pub selection: Option<EditorSelection>,
 }
 
+/// One LSP diagnostic pushed by the language server. Severity follows LSP:
+/// 1 = Error, 2 = Warning, 3 = Information, 4 = Hint.
+#[derive(Debug, Clone, Deserialize)]
+pub struct EditorLspDiagnostic {
+    pub range: EditorLspRange,
+    #[serde(default)]
+    pub severity: Option<u8>,
+    #[serde(default)]
+    pub code: Option<String>,
+    #[serde(default)]
+    pub source: Option<String>,
+    pub message: String,
+}
+
+/// Zero-based LSP range (start inclusive, end exclusive).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EditorLspRange {
+    pub start: LspPosition,
+    pub end: LspPosition,
+}
+
+/// Zero-based LSP position (`character` is in UTF-16 code units).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LspPosition {
+    pub line: u32,
+    pub character: u32,
+}
+
+/// A jump target (`editor.lsp.definition` / `references`).
+#[derive(Debug, Clone, Deserialize)]
+pub struct EditorLspLocation {
+    pub uri: String,
+    pub range: EditorLspRange,
+}
+
+/// One entry of `editor.lsp.symbols` (nested).
+#[derive(Debug, Clone, Deserialize)]
+pub struct EditorLspSymbol {
+    pub name: String,
+    /// LSP SymbolKind integer (12 = Function, 13 = Variable, ...).
+    pub kind: u32,
+    #[serde(default)]
+    pub detail: Option<String>,
+    pub range: EditorLspRange,
+    pub selection_range: EditorLspRange,
+    #[serde(default)]
+    pub children: Vec<EditorLspSymbol>,
+}
+
+/// Result of `editor.lsp.diagnostics`.
+#[derive(Debug, Clone, Deserialize)]
+pub struct EditorLspDiagnosticsResult {
+    pub document_id: String,
+    pub document_revision: u64,
+    pub diagnostics: Vec<EditorLspDiagnostic>,
+    #[serde(default)]
+    pub server_unavailable: Option<String>,
+}
+
+/// Result of `editor.lsp.definition` / `editor.lsp.references`.
+#[derive(Debug, Clone, Deserialize)]
+pub struct EditorLspLocationsResult {
+    pub document_id: String,
+    pub document_revision: u64,
+    pub locations: Vec<EditorLspLocation>,
+}
+
+/// Result of `editor.lsp.symbols`.
+#[derive(Debug, Clone, Deserialize)]
+pub struct EditorLspSymbolsResult {
+    pub document_id: String,
+    pub document_revision: u64,
+    pub symbols: Vec<EditorLspSymbol>,
+}
+
+/// Result of `editor.lsp.hover` / `editor.lsp.signature_help`: the raw LSP
+/// payload (contents structure varies by server).
+#[derive(Debug, Clone, Deserialize)]
+pub struct EditorLspRawResult {
+    pub document_id: String,
+    pub document_revision: u64,
+    pub result: Value,
+}
+
+/// Request wire shape for `editor.lsp.diagnostics` / `editor.lsp.symbols`.
+/// Mirrors `neon-editor-runtime::EditorLspRef`.
+#[derive(Debug, Clone, Serialize)]
+pub struct EditorLspRef {
+    pub document_id: String,
+    pub session_id: String,
+    pub epoch: u64,
+    pub document_revision: u64,
+}
+
+/// Request wire shape for position-scoped LSP methods.
+/// Mirrors `neon-editor-runtime::EditorLspPosition`.
+#[derive(Debug, Clone, Serialize)]
+pub struct EditorLspPositionRequest {
+    pub document_id: String,
+    pub session_id: String,
+    pub epoch: u64,
+    pub document_revision: u64,
+    pub position: EditorPosition,
+}
+
 /// High-level wrapper for the headless editor document service.
 #[derive(Debug)]
 pub struct EditorClient {
@@ -265,8 +384,11 @@ impl EditorClient {
     ) -> Result<EditorOpenResult, String> {
         validate_identity(document_id, session_id)?;
         let language = if language.trim().is_empty() { EDITOR_LANGUAGE_NUI_FLOW } else { language };
-        if language != EDITOR_LANGUAGE_NUI_FLOW {
-            return Err(format!("unsupported editor language {language:?}; only {EDITOR_LANGUAGE_NUI_FLOW:?} is supported"));
+        if !EDITOR_LANGUAGES.contains(&language) {
+            return Err(format!(
+                "unsupported editor language {language:?}; supported: {:?}",
+                EDITOR_LANGUAGES
+            ));
         }
         let result = self.ok_mutating(
             m::EDITOR_DOCUMENT_OPEN,
@@ -393,6 +515,176 @@ impl EditorClient {
             idempotency_key,
         )
     }
+
+    /// Latest published diagnostics (`editor.lsp.diagnostics`). When the
+    /// language server binary is missing, `server_unavailable` carries the
+    /// reason and the document stays fully editable with tree-sitter
+    /// highlighting.
+    pub fn lsp_diagnostics(
+        &mut self,
+        document_id: &str,
+        session_id: &str,
+        epoch: u64,
+        document_revision: u64,
+    ) -> Result<EditorLspDiagnosticsResult, String> {
+        validate_identity(document_id, session_id)?;
+        let result = self.ok(
+            m::EDITOR_LSP_DIAGNOSTICS,
+            serde_json::to_value(EditorLspRef {
+                document_id: document_id.into(),
+                session_id: session_id.into(),
+                epoch,
+                document_revision,
+            })
+            .map_err(|e| e.to_string())?,
+        )?;
+        serde_json::from_value(result).map_err(|e| format!("decode {} result: {e}", m::EDITOR_LSP_DIAGNOSTICS))
+    }
+
+    /// Hover information at `position` (`editor.lsp.hover`). The raw LSP
+    /// payload is returned; `result: null` when the server is unavailable.
+    pub fn lsp_hover(
+        &mut self,
+        document_id: &str,
+        session_id: &str,
+        epoch: u64,
+        document_revision: u64,
+        position: EditorPosition,
+    ) -> Result<EditorLspRawResult, String> {
+        self.lsp_position_call(
+            m::EDITOR_LSP_HOVER,
+            document_id,
+            session_id,
+            epoch,
+            document_revision,
+            position,
+        )
+    }
+
+    /// Jump-to-definition targets at `position` (`editor.lsp.definition`).
+    pub fn lsp_definition(
+        &mut self,
+        document_id: &str,
+        session_id: &str,
+        epoch: u64,
+        document_revision: u64,
+        position: EditorPosition,
+    ) -> Result<EditorLspLocationsResult, String> {
+        let result = self.lsp_position_call_raw(
+            m::EDITOR_LSP_DEFINITION,
+            document_id,
+            session_id,
+            epoch,
+            document_revision,
+            position,
+        )?;
+        serde_json::from_value(result).map_err(|e| format!("decode {} result: {e}", m::EDITOR_LSP_DEFINITION))
+    }
+
+    /// All references of the symbol at `position` (`editor.lsp.references`).
+    pub fn lsp_references(
+        &mut self,
+        document_id: &str,
+        session_id: &str,
+        epoch: u64,
+        document_revision: u64,
+        position: EditorPosition,
+    ) -> Result<EditorLspLocationsResult, String> {
+        let result = self.lsp_position_call_raw(
+            m::EDITOR_LSP_REFERENCES,
+            document_id,
+            session_id,
+            epoch,
+            document_revision,
+            position,
+        )?;
+        serde_json::from_value(result).map_err(|e| format!("decode {} result: {e}", m::EDITOR_LSP_REFERENCES))
+    }
+
+    /// Document outline (`editor.lsp.symbols`).
+    pub fn lsp_symbols(
+        &mut self,
+        document_id: &str,
+        session_id: &str,
+        epoch: u64,
+        document_revision: u64,
+    ) -> Result<EditorLspSymbolsResult, String> {
+        validate_identity(document_id, session_id)?;
+        let result = self.ok(
+            m::EDITOR_LSP_SYMBOLS,
+            serde_json::to_value(EditorLspRef {
+                document_id: document_id.into(),
+                session_id: session_id.into(),
+                epoch,
+                document_revision,
+            })
+            .map_err(|e| e.to_string())?,
+        )?;
+        serde_json::from_value(result).map_err(|e| format!("decode {} result: {e}", m::EDITOR_LSP_SYMBOLS))
+    }
+
+    /// Signature help at `position` (`editor.lsp.signature_help`). The raw
+    /// LSP payload is returned; `result: null` when the server is unavailable.
+    pub fn lsp_signature_help(
+        &mut self,
+        document_id: &str,
+        session_id: &str,
+        epoch: u64,
+        document_revision: u64,
+        position: EditorPosition,
+    ) -> Result<EditorLspRawResult, String> {
+        self.lsp_position_call(
+            m::EDITOR_LSP_SIGNATURE_HELP,
+            document_id,
+            session_id,
+            epoch,
+            document_revision,
+            position,
+        )
+    }
+
+    fn lsp_position_call(
+        &mut self,
+        method: &str,
+        document_id: &str,
+        session_id: &str,
+        epoch: u64,
+        document_revision: u64,
+        position: EditorPosition,
+    ) -> Result<EditorLspRawResult, String> {
+        let result = self.lsp_position_call_raw(
+            method,
+            document_id,
+            session_id,
+            epoch,
+            document_revision,
+            position,
+        )?;
+        serde_json::from_value(result).map_err(|e| format!("decode {method} result: {e}"))
+    }
+
+    fn lsp_position_call_raw(
+        &mut self,
+        method: &str,
+        document_id: &str,
+        session_id: &str,
+        epoch: u64,
+        document_revision: u64,
+        position: EditorPosition,
+    ) -> Result<Value, String> {
+        validate_identity(document_id, session_id)?;
+        self.ok(
+            method,
+            serde_json::to_value(EditorLspPositionRequest {
+                document_id: document_id.into(),
+                session_id: session_id.into(),
+                epoch,
+                document_revision,
+                position,
+            })
+            .map_err(|e| e.to_string())?,
+        )
+    }
 }
 
 fn validate_identity(document_id: &str, session_id: &str) -> Result<(), String> {
@@ -492,5 +784,77 @@ mod tests {
         let already: EditorOpenResult = serde_json::from_value(json!({"state": "already_open"})).unwrap();
         assert_eq!(already.state, "already_open");
         assert!(already.snapshot.is_none());
+    }
+
+    #[test]
+    fn lsp_constants_and_languages_are_stable() {
+        assert_eq!(m::EDITOR_LSP_DIAGNOSTICS, "editor.lsp.diagnostics");
+        assert_eq!(m::EDITOR_LSP_HOVER, "editor.lsp.hover");
+        assert_eq!(m::EDITOR_LSP_DEFINITION, "editor.lsp.definition");
+        assert_eq!(m::EDITOR_LSP_REFERENCES, "editor.lsp.references");
+        assert_eq!(m::EDITOR_LSP_SYMBOLS, "editor.lsp.symbols");
+        assert_eq!(m::EDITOR_LSP_SIGNATURE_HELP, "editor.lsp.signature_help");
+        assert!(EDITOR_LANGUAGES.contains(&EDITOR_LANGUAGE_NUI_FLOW));
+        assert!(EDITOR_LANGUAGES.contains(&EDITOR_LANGUAGE_TYPESCRIPT));
+        assert!(EDITOR_LANGUAGES.contains(&EDITOR_LANGUAGE_RUST));
+        assert!(EDITOR_LANGUAGES.contains(&EDITOR_LANGUAGE_CPP));
+    }
+
+    #[test]
+    fn lsp_results_decode_runtime_shapes() {
+        let diagnostics: EditorLspDiagnosticsResult = serde_json::from_value(json!({
+            "document_id": "doc-1", "document_revision": 3,
+            "diagnostics": [{
+                "range": {"start": {"line": 0, "character": 4}, "end": {"line": 0, "character": 9}},
+                "severity": 1, "code": "E0308", "source": "rustc", "message": "mismatched types"
+            }],
+            "server_unavailable": null
+        }))
+        .unwrap();
+        assert_eq!(diagnostics.diagnostics[0].code.as_deref(), Some("E0308"));
+        assert_eq!(diagnostics.diagnostics[0].range.start.character, 4);
+
+        let symbols: EditorLspSymbolsResult = serde_json::from_value(json!({
+            "document_id": "doc-1", "document_revision": 3,
+            "symbols": [{
+                "name": "main", "kind": 12,
+                "range": {"start": {"line": 0, "character": 0}, "end": {"line": 2, "character": 1}},
+                "selection_range": {"start": {"line": 0, "character": 3}, "end": {"line": 0, "character": 7}},
+                "children": []
+            }]
+        }))
+        .unwrap();
+        assert_eq!(symbols.symbols[0].kind, 12);
+
+        let locations: EditorLspLocationsResult = serde_json::from_value(json!({
+            "document_id": "doc-1", "document_revision": 3,
+            "locations": [{"uri": "file:///a.rs", "range": {"start": {"line": 1, "character": 0}, "end": {"line": 1, "character": 4}}}]
+        }))
+        .unwrap();
+        assert_eq!(locations.locations[0].uri, "file:///a.rs");
+
+        let raw: EditorLspRawResult = serde_json::from_value(json!({
+            "document_id": "doc-1", "document_revision": 3, "result": null
+        }))
+        .unwrap();
+        assert!(raw.result.is_null());
+    }
+
+    #[test]
+    fn lsp_request_wire_shapes_match_runtime() {
+        let request = EditorLspPositionRequest {
+            document_id: "doc-1".into(),
+            session_id: "sess-1".into(),
+            epoch: 2,
+            document_revision: 3,
+            position: EditorPosition::new(0, 6),
+        };
+        assert_eq!(
+            serde_json::to_value(&request).unwrap(),
+            json!({
+                "document_id": "doc-1", "session_id": "sess-1", "epoch": 2,
+                "document_revision": 3, "position": {"line": 0, "column": 6}
+            })
+        );
     }
 }

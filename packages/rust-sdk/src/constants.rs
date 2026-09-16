@@ -66,6 +66,14 @@ pub mod method {
     pub const EDITOR_DOCUMENT_CHANGE_COMMIT: &str = "editor.document.change.commit";
     pub const EDITOR_COMPLETION_REQUEST: &str = "editor.completion.request";
     pub const EDITOR_DOCUMENT_CLOSE: &str = "editor.document.close";
+
+    // --- editor-runtime: LSP introspection (v0.2.12+) ---
+    pub const EDITOR_LSP_DIAGNOSTICS: &str = "editor.lsp.diagnostics";
+    pub const EDITOR_LSP_HOVER: &str = "editor.lsp.hover";
+    pub const EDITOR_LSP_DEFINITION: &str = "editor.lsp.definition";
+    pub const EDITOR_LSP_REFERENCES: &str = "editor.lsp.references";
+    pub const EDITOR_LSP_SYMBOLS: &str = "editor.lsp.symbols";
+    pub const EDITOR_LSP_SIGNATURE_HELP: &str = "editor.lsp.signature_help";
 }
 
 /// Event names published on eventd.
