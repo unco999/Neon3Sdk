@@ -19,8 +19,11 @@ pub use android::{ANDROID_HOST_ENDPOINT, ANDROID_HOST_PORT, AndroidConfig, Andro
 pub use client::{ClientOptions, NeonClient};
 pub use editor::{
     ChangeSet, CompletionItem, CompletionTriggerKind, EditorChangeKind, EditorClient, EditorCompletionResult,
-    EditorOpenResult, EditorOperationResult, EditorPosition, EditorSelection, EditorSnapshot, EditOp,
-    EDITOR_LANGUAGE_NUI_FLOW, MAX_CHANGESET_OPS, MAX_INSERT_BYTES,
+    EditorLspDiagnostic, EditorLspDiagnosticsResult, EditorLspLocation, EditorLspLocationsResult,
+    EditorLspPositionRequest, EditorLspRange, EditorLspRawResult, EditorLspRef, EditorLspSymbol,
+    EditorLspSymbolsResult, EditorOpenResult, EditorOperationResult, EditorPosition, EditorSelection,
+    EditorSnapshot, EditOp, EDITOR_LANGUAGES, EDITOR_LANGUAGE_CPP, EDITOR_LANGUAGE_NUI_FLOW,
+    EDITOR_LANGUAGE_RUST, EDITOR_LANGUAGE_TYPESCRIPT, MAX_CHANGESET_OPS, MAX_INSERT_BYTES, LspPosition,
 };
 pub use event::{EventClient, EventEnvelope, EventSubscription, ShaderEvent};
 pub use render::{ExternalSurface, RenderClient, ShaderPackage, ShaderParameter, SurfaceKind, SurfaceOpen, SurfaceSize, shader_source_digest};
