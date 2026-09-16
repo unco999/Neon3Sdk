@@ -90,7 +90,7 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
 name = "neon3-c"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "libloading",
  "neon3-sdk",
@@ -100,7 +100,7 @@ dependencies = [
 
 [[package]]
 name = "neon3-sdk"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "serde",
  "serde_json",
