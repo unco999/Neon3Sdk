@@ -15,6 +15,6 @@ crate-type = ["cdylib", "staticlib", "lib"]
 libloading = "0.8"
 
 [dependencies]
-neon3-sdk = { path = "../rust-sdk" }
+neon3-sdk = "0.1.7"
 serde_json = "1"
 uuid = { version = "1", features = ["v4"] }
