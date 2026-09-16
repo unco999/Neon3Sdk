@@ -1,4 +1,4 @@
-import { spawn, ChildProcess, execFile } from "node:child_process";
+import { spawn, ChildProcess } from "node:child_process";
 import { access, mkdir, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
@@ -7,7 +7,7 @@ import { NeonClient } from "./client.js";
 
 export const NEON3_RUNTIME_VERSION = "latest";
 const NEON3_RUNTIME_REPOSITORY = "unco999/Neon3-CiJian";
-const NEON3_RUNTIME_ASSET = (version: string) => `neon3-runtime-windows-x86_64-${version}.zip`;
+const NEON3_RUNTIME_ASSET = (version: string) => `neon3-runtime-windows-x86_64-${version}.exe`;
 
 export type RuntimeMode = "windowed" | "headless" | "external_surface";
 export type RuntimeProfile = "auto" | "debug" | "release";
@@ -39,26 +39,27 @@ export class RuntimeSession {
       this.config.runtimeVersion = version;
     }
     this.executableDir = await this.findExecutableDir();
-    const specs: Array<[string, string, string[]]> = [
-      ["eventd", join(this.executableDir, "neon-eventd.exe"), ["--server", this.config.eventd, "1"]],
-      ["wgpu", join(this.executableDir, "neon-wgpu-runtime.exe"), this.wgpuArgs()],
-      ["ui", join(this.executableDir, "neon-ui-runtime.exe"), ["--forward-server", this.config.ui, this.config.wgpu, this.config.domain, "--eventd", this.config.eventd]],
+    const runtimeArgs = [
+      "serve",
+      "--eventd", this.config.eventd,
+      "--ui", this.config.ui,
+      "--wgpu", this.config.wgpu,
+      "--editor", this.config.domain,
     ];
+    if (this.config.mode !== "headless") runtimeArgs.push("--window");
+    const executable = join(this.executableDir, "neon3-runtime.exe");
     try {
-      for (const [name, executable, args] of specs) {
-        await access(executable);
-        this.processes.push(spawn(executable, args, {
-          cwd: this.config.neonRoot,
-          stdio: "ignore",
-          windowsHide: false,
-          env: name === "wgpu" ? this.wgpuEnvironment() : process.env,
-        }));
-      }
+      await access(executable);
+      this.processes.push(spawn(executable, runtimeArgs, {
+        cwd: this.config.neonRoot,
+        stdio: "ignore",
+        windowsHide: false,
+        env: this.runtimeEnvironment(),
+      }));
       await this.waitReady();
     } catch (error) { await this.stop(); throw error; }
   }
-  private wgpuArgs(): string[] { return this.config.mode === "headless" ? ["--headless-server", this.config.wgpu] : ["--window-server", this.config.wgpu, this.config.ui, "--eventd", this.config.eventd]; }
-  private wgpuEnvironment(): NodeJS.ProcessEnv {
+  private runtimeEnvironment(): NodeJS.ProcessEnv {
     const backdrop = this.config.windowBackdrop;
     if (!backdrop) return process.env;
     if (!Number.isFinite(backdrop.blurAmount ?? 0) || (backdrop.blurAmount ?? 0) < 0 || (backdrop.blurAmount ?? 0) > 64) throw new Error("windowBackdrop.blurAmount must be between 0 and 64");
@@ -78,7 +79,7 @@ export class RuntimeSession {
     for (const profile of profiles) {
       const directory = join(this.config.neonRoot, "target", profile);
       try {
-        await Promise.all(["neon-eventd.exe", "neon-wgpu-runtime.exe", "neon-ui-runtime.exe"].map((name) => access(join(directory, name))));
+        await access(join(directory, "neon3-runtime.exe"));
         this.selectedProfile = profile;
         return directory;
       } catch {
@@ -94,17 +95,14 @@ export class RuntimeSession {
   }
   private async ensureDownloadedRuntime(version: string): Promise<string> {
     const cacheRoot = join(process.env.LOCALAPPDATA ?? join(homedir(), "AppData", "Local"), "Neon3Sdk", "runtime", version);
-    const binaries = ["neon-eventd.exe", "neon-wgpu-runtime.exe", "neon-ui-runtime.exe"];
-    try { await Promise.all(binaries.map(name => access(join(cacheRoot, "target", "release", name)))); return cacheRoot; } catch { /* download below */ }
-    await mkdir(cacheRoot, { recursive: true });
+    const executablePath = join(cacheRoot, "target", "release", "neon3-runtime.exe");
+    try { await access(executablePath); return cacheRoot; } catch { /* download below */ }
+    await mkdir(join(cacheRoot, "target", "release"), { recursive: true });
     const asset = NEON3_RUNTIME_ASSET(version);
-    const archive = join(cacheRoot, `${asset}.download`);
     const url = `https://github.com/${NEON3_RUNTIME_REPOSITORY}/releases/download/${version}/${asset}`;
     const downloadTimeoutMs = Math.max(this.config.timeoutMs, 180000);
-    await download(url, archive, downloadTimeoutMs);
-    await new Promise<void>((resolve, reject) => execFile("tar", ["-xf", archive, "-C", cacheRoot], { timeout: downloadTimeoutMs }, error => error ? reject(error) : resolve()));
-    await unlink(archive).catch(() => undefined);
-    await Promise.all(binaries.map(name => access(join(cacheRoot, "target", "release", name))));
+    await download(url, executablePath, downloadTimeoutMs);
+    await access(executablePath);
     return cacheRoot;
   }
   private async waitReady(): Promise<void> {

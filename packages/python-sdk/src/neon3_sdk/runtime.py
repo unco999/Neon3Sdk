@@ -8,7 +8,6 @@ import os
 import subprocess
 import time
 import urllib.request
-import zipfile
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Any
@@ -17,7 +16,7 @@ from .client import NeonClient
 
 NEON3_RUNTIME_VERSION = "latest"
 NEON3_RUNTIME_REPOSITORY = "unco999/Neon3-CiJian"
-NEON3_RUNTIME_ASSET_TEMPLATE = "neon3-runtime-windows-x86_64-{version}.zip"
+NEON3_RUNTIME_ASSET_TEMPLATE = "neon3-runtime-windows-x86_64-{version}.exe"
 
 
 def runtime_version() -> str:
@@ -58,23 +57,17 @@ def default_neon_root(version: str | None = None) -> Path:
 
 
 def _runtime_available(root: Path) -> bool:
-    return all((root / "target" / "release" / name).is_file() for name in (
-        "neon-eventd.exe", "neon-wgpu-runtime.exe", "neon-ui-runtime.exe"
-    ))
+    return (root / "target" / "release" / "neon3-runtime.exe").is_file()
 
 
 def _download_runtime(root: Path, version: str) -> None:
-    root.mkdir(parents=True, exist_ok=True)
+    executable_dir = root / "target" / "release"
+    executable_dir.mkdir(parents=True, exist_ok=True)
     asset = NEON3_RUNTIME_ASSET_TEMPLATE.format(version=version)
-    archive = root.parent / f"{asset}.download"
     url = f"https://github.com/{NEON3_RUNTIME_REPOSITORY}/releases/download/{version}/{asset}"
-    try:
-        with urllib.request.urlopen(url, timeout=180) as response, archive.open("wb") as stream:
-            stream.write(response.read())
-        with zipfile.ZipFile(archive) as bundle:
-            bundle.extractall(root)
-    finally:
-        archive.unlink(missing_ok=True)
+    destination = executable_dir / "neon3-runtime.exe"
+    with urllib.request.urlopen(url, timeout=180) as response, destination.open("wb") as stream:
+        stream.write(response.read())
 
 
 class RuntimeMode(str, enum.Enum):
@@ -131,7 +124,7 @@ class RuntimeSession:
             (
                 root / "target" / profile
                 for profile in profiles
-                if all((root / "target" / profile / name).is_file() for name in ("neon-eventd.exe", "neon-wgpu-runtime.exe", "neon-ui-runtime.exe"))
+                if (root / "target" / profile / "neon3-runtime.exe").is_file()
             ),
             None,
         )
@@ -146,17 +139,21 @@ class RuntimeSession:
             runtime_dir = root / "target" / "release"
         if runtime_dir is None:
             raise FileNotFoundError(f"Neon3 release/debug binaries not found under {root}")
-        specs = [
-            ("eventd", runtime_dir / "neon-eventd.exe", ("--server", self.config.endpoints.eventd, "1")),
-            ("wgpu-runtime", runtime_dir / "neon-wgpu-runtime.exe", self.config.wgpu_arguments),
-            ("ui-runtime", runtime_dir / "neon-ui-runtime.exe", ("--forward-server", self.config.endpoints.ui, self.config.endpoints.wgpu, self.config.domain_endpoint, "--eventd", self.config.endpoints.eventd)),
+        runtime_args = [
+            "serve",
+            "--eventd", self.config.endpoints.eventd,
+            "--ui", self.config.endpoints.ui,
+            "--wgpu", self.config.endpoints.wgpu,
+            "--editor", self.config.domain_endpoint,
         ]
+        if self.config.mode is not RuntimeMode.HEADLESS:
+            runtime_args.append("--window")
+        executable = runtime_dir / "neon3-runtime.exe"
         try:
-            for name, executable, arguments in specs:
-                if not executable.is_file():
-                    raise FileNotFoundError(f"Neon3 executable not found: {executable}")
-                process = subprocess.Popen([str(executable), *arguments], cwd=root, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, text=True)
-                self.processes.append((name, process))
+            if not executable.is_file():
+                raise FileNotFoundError(f"Neon3 executable not found: {executable}")
+            process = subprocess.Popen([str(executable), *runtime_args], cwd=root, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, text=True)
+            self.processes.append(("runtime", process))
             self.wait_ready()
         except Exception:
             self.stop()
