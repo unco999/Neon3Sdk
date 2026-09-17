@@ -179,17 +179,30 @@ pub fn mount_flow_file(client: &mut NeonClient, source: &str) -> Result<UiProgra
     UiSession::new(UiTarget::UiRuntime).mount_flow(client, source)
 }
 
+/// One patch operation.
+#[derive(serde::Serialize)]
+pub struct PatchOp {
+    pub kind: &'static str,
+    pub path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub property: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub value: Option<String>,
+}
+
 /// Apply an incremental patch to the currently mounted flow.
 /// Faster than full remount: skips text parsing.
-pub fn patch_flow(
+/// revision: current IR revision (starts at 1, increments per patch).
+pub fn patch_flow_ops(
     client: &mut NeonClient,
-    patch_source: &str,
+    revision: u64,
+    ops: &[PatchOp],
 ) -> Result<Value, String> {
     let idem = format!("flow-patch:{}", uuid::Uuid::new_v4());
     let response = client.call_with_idempotency(
         "ui-runtime",
         "ui.flow.patch",
-        json!({ "patch": patch_source }),
+        json!({ "revision": revision, "operations": ops }),
         Some(idem),
     )?;
     let result = response.ok().map_err(|f: RpcFailure| f.to_string())?;
