@@ -59,10 +59,12 @@ impl UiSession {
         client: &mut NeonClient,
         source: &str,
     ) -> Result<UiProgram, String> {
-        let response = client.call(
+        let idem = format!("flow-mount:{}", uuid::Uuid::new_v4());
+        let response = client.call_with_idempotency(
             self.target.as_str(),
             "ui.flow.submit",
             json!({"source": source}),
+            Some(idem),
         )?;
         let result = response.ok().map_err(|f: RpcFailure| f.to_string())?;
         let program: UiProgram = serde_json::from_value(result)
