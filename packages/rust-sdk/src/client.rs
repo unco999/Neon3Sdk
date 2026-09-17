@@ -15,7 +15,7 @@ pub struct ClientOptions {
 impl Default for ClientOptions {
     fn default() -> Self {
         Self {
-            timeout: Duration::from_secs(5),
+            timeout: Duration::from_secs(30),
             max_frame_size: 128 * 1024 * 1024,
             kind: "cli".into(),
             origin: "unknown".into(),
