@@ -27,5 +27,5 @@ pub use editor::{
 };
 pub use event::{EventClient, EventEnvelope, EventSubscription, ShaderEvent};
 pub use render::{ExternalSurface, RenderClient, ShaderPackage, ShaderParameter, SurfaceKind, SurfaceOpen, SurfaceSize, shader_source_digest};
-pub use session::{IntentResult, PublishResult, UiProgram, UiProgramRevision, UiSession, UiTarget};
+pub use session::{IntentResult, PublishResult, UiProgram, UiProgramRevision, UiSession, UiTarget, mount_flow_file, patch_flow};
 pub use wire::{ClientIdentity, RpcError, RpcFailure, RpcRequest, RpcResponse, Version};

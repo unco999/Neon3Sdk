@@ -178,3 +178,20 @@ pub struct PublishResult {
 pub fn mount_flow_file(client: &mut NeonClient, source: &str) -> Result<UiProgram, String> {
     UiSession::new(UiTarget::UiRuntime).mount_flow(client, source)
 }
+
+/// Apply an incremental patch to the currently mounted flow.
+/// Faster than full remount: skips text parsing.
+pub fn patch_flow(
+    client: &mut NeonClient,
+    patch_source: &str,
+) -> Result<Value, String> {
+    let idem = format!("flow-patch:{}", uuid::Uuid::new_v4());
+    let response = client.call_with_idempotency(
+        "ui-runtime",
+        "ui.flow.patch",
+        json!({ "patch": patch_source }),
+        Some(idem),
+    )?;
+    let result = response.ok().map_err(|f: RpcFailure| f.to_string())?;
+    Ok(result)
+}
