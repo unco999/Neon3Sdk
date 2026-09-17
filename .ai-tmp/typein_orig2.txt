@@ -1,0 +1,24 @@
+const TEXT_TYPE_IN_SOURCE: &str = r#"
+fn text_material(input: TextMaterialInput) -> vec4<f32> {
+    let t = fract(input.time_seconds * 2.4);
+    let appear = smoothstep(0.0, 0.35, t);
+    let core = smoothstep(0.08, 0.55, input.coverage);
+    // Holographic scan band sweeping top -> bottom once across the glyph box.
+    let scan_y = input.local_position.y / max(input.glyph_quad.w, 1.0);
+    let scan = smoothstep(0.10, 0.0, abs(scan_y - t));
+    // Energy lift: the glyph rises out of the baseline.
+    let lift = (1.0 - appear) * 12.0;
+    let holo = vec3<f32>(0.35, 1.0, 0.95);
+    let base = input.base_color.rgb;
+    let energy = (1.0 - appear) * 1.2;
+    let rgb = mix(base, holo, 0.55) * (0.72 + 0.55 * scan + energy * 0.5);
+    let glow = pow(input.edge_ink, 2.0) * (0.9 + scan * 1.4) * (1.0 - t * 0.4);
+    let alpha = clamp(core * appear + glow * 0.55, 0.0, 1.0);
+    return vec4<f32>(rgb + holo * glow * 0.9, alpha);
+}
+"#;
+
+/// Transient delete: the ghost detonates into cyan energy -- a leading white
+/// flash, a fast exponential boom, per-pixel particle jitter, and a flickering
+/// ember tail as it fades (A-route, no SDF; the renderer snaps the ghost at the
+/// pre-delete position and expires the fx after ~620 ms).
