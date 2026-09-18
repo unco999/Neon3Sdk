@@ -100,7 +100,9 @@ impl NeonClient {
         idempotency_key: Option<String>,
         expected_revision: Option<u64>,
     ) -> Result<RpcResponse, String> {
+        let t0 = std::time::Instant::now();
         let stream = self.dial()?;
+        let t_dial = t0.elapsed();
         let mut writer = BufWriter::new(&stream);
         let mut reader = BufReader::new(&stream);
 
@@ -111,9 +113,12 @@ impl NeonClient {
         write_frame(&mut writer, &serde_json::to_value(&request).map_err(|e| e.to_string())?)
             .map_err(|e| format!("write: {e}"))?;
         writer.flush().map_err(|e| format!("flush: {e}"))?;
+        let t_write = t0.elapsed();
 
         let frame = read_frame(&mut reader, self.options.max_frame_size)
             .map_err(|e| format!("read response: {e}"))?;
+        let t_read = t0.elapsed();
+        eprintln!("[sdk] {}: dial={:?} write={:?} read={:?}", method, t_dial, t_write - t_dial, t_read - t_write);
         let response: RpcResponse = serde_json::from_value(frame).map_err(|e| format!("parse: {e}"))?;
         if response.request_id != request.request_id {
             return Err(format!("request_id mismatch"));

@@ -30,7 +30,9 @@ pub mod method {
     pub const SERVICE_SHUTDOWN: &str = "service.shutdown";
 
     // --- ui-runtime ---
+    pub const UI_FLOW_COMPILE: &str = "ui.flow.compile";
     pub const UI_FLOW_SUBMIT: &str = "ui.flow.submit";
+    pub const UI_FLOW_PATCH: &str = "ui.flow.patch";
     pub const UI_HOST_INBOUND: &str = "ui.host.inbound";
     pub const UI_INPUT_FRAME: &str = "ui.input.frame";
     pub const UI_HOST_POINTER_EVENT: &str = "ui.host.pointer_event";

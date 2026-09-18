@@ -154,7 +154,7 @@ impl EventClient {
                 pid: std::process::id(),
                 origin: self.origin.clone(),
             },
-            "filters": [{ "name": name, "name_prefix": Value::Null, "publisher_kinds": Value::Null }],
+            "filters": [{ "name": Value::Null, "name_prefix": name, "publisher_kinds": Value::Null }],
             "replay_from_sequence": Value::Null,
             "max_rate_hz": Value::Null,
         });

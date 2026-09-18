@@ -84,7 +84,7 @@ impl RpcRequest {
 }
 
 /// Error object inside a rejected/failed response.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RpcError {
     pub code: String,
     pub message: String,
@@ -92,10 +92,15 @@ pub struct RpcError {
     pub current_revision: Option<u64>,
     #[serde(default)]
     pub object_id: Option<String>,
+    /// Structured runtime details. NUI Flow compile failures put their
+    /// `NuiFlowCompileReport` here; keep the raw value for forward
+    /// compatibility instead of reducing it to a display string.
+    #[serde(default)]
+    pub details: Option<Value>,
 }
 
 /// A `neon3.rpc` response envelope.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RpcResponse {
     pub request_id: String,
     pub status: String,
@@ -126,6 +131,9 @@ impl RpcResponse {
                 status: self.status,
                 request_id: self.request_id,
                 revision: self.revision,
+                current_revision: self.error.as_ref().and_then(|e| e.current_revision),
+                object_id: self.error.as_ref().and_then(|e| e.object_id.clone()),
+                details: self.error.as_ref().and_then(|e| e.details.clone()),
             })
         }
     }
@@ -139,6 +147,9 @@ pub struct RpcFailure {
     pub status: String,
     pub request_id: String,
     pub revision: Option<u64>,
+    pub current_revision: Option<u64>,
+    pub object_id: Option<String>,
+    pub details: Option<Value>,
 }
 
 impl std::fmt::Display for RpcFailure {
@@ -205,10 +216,16 @@ mod tests {
 
         let rejected: RpcResponse = serde_json::from_value(serde_json::json!({
             "request_id": "r2", "status": "rejected", "revision": 7, "result": null, "snapshot": null,
-            "error": {"code": "revision_conflict", "message": "stale"}
+            "error": {
+                "code": "revision_conflict", "message": "stale", "current_revision": 8,
+                "object_id": "program-1", "details": {"expected": 7, "actual": 8}
+            }
         })).unwrap();
         let failure = rejected.ok().unwrap_err();
         assert_eq!(failure.code, "revision_conflict");
         assert_eq!(failure.revision, Some(7));
+        assert_eq!(failure.current_revision, Some(8));
+        assert_eq!(failure.object_id.as_deref(), Some("program-1"));
+        assert_eq!(failure.details.unwrap()["actual"], 8);
     }
 }

@@ -21,6 +21,7 @@
 //! ```
 
 use crate::client::{ClientOptions, NeonClient};
+use crate::error::{NuiFlowCompileReport, NuiFlowError};
 use crate::event::EventClient;
 use crate::render::RenderClient;
 use crate::session::{UiSession, UiTarget};
@@ -75,6 +76,18 @@ impl App {
 
     pub fn mount(&mut self, source: &str) -> Result<(), String> {
         self.session.mount_flow(&mut self.client, source)?;
+        Ok(())
+    }
+
+    /// Compile NUI Flow without activating it. Structured diagnostics are
+    /// available through `NuiFlowError::Compile`.
+    pub fn compile_flow(&mut self, source: &str) -> Result<NuiFlowCompileReport, NuiFlowError> {
+        self.session.compile_flow(&mut self.client, source)
+    }
+
+    /// Mount NUI Flow while preserving parse/compile diagnostics.
+    pub fn mount_checked(&mut self, source: &str) -> Result<(), NuiFlowError> {
+        self.session.mount_flow_checked(&mut self.client, source)?;
         Ok(())
     }
 

@@ -1,6 +1,6 @@
 ﻿[package]
 name = "neon3-sdk"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 description = "Rust client SDK for the Neon3 control-plane protocol"
 repository = "https://github.com/unco999/Neon3Sdk"
@@ -17,3 +17,35 @@ uuid = { version = "1", features = ["v4"] }
 [[bin]]
 name = "sdk_probe"
 path = "src/bin/sdk_probe.rs"
+
+[[bin]]
+name = "nui_flow_diagnostics_probe"
+path = "src/bin/nui_flow_diagnostics_probe.rs"
+
+[[bin]]
+name = "ui_patch_contract_probe"
+path = "src/bin/ui_patch_contract_probe.rs"
+
+[[bin]]
+name = "tree_frame_probe"
+path = "src/bin/tree_frame_probe.rs"
+
+[[bin]]
+name = "editor_document_probe"
+path = "src/bin/editor_document_probe.rs"
+
+[[bin]]
+name = "diff_review_probe"
+path = "src/bin/diff_review_probe.rs"
+
+[[bin]]
+name = "conversation_probe"
+path = "src/bin/conversation_probe.rs"
+
+[[bin]]
+name = "approval_probe"
+path = "src/bin/approval_probe.rs"
+
+[[bin]]
+name = "neon3-rust-sdk"
+path = "src/bin/neon3_sdk_cli.rs"

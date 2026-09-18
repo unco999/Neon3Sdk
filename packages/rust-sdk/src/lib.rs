@@ -5,14 +5,19 @@
 //! the desktop runtime, the headless GPU server, or the Android host endpoint.
 
 pub mod android;
+pub mod approval;
 pub mod client;
 pub mod constants;
+pub mod conversation;
 pub mod editor;
+pub mod diff;
 pub mod error;
 pub mod event;
 pub mod facade;
 pub mod render;
 pub mod session;
+pub mod tree;
+pub mod ui_patch;
 pub mod wire;
 
 pub use android::{ANDROID_HOST_ENDPOINT, ANDROID_HOST_PORT, AndroidConfig, AndroidSession, AndroidSessionHandle};
@@ -26,6 +31,12 @@ pub use editor::{
     EDITOR_LANGUAGE_RUST, EDITOR_LANGUAGE_TYPESCRIPT, MAX_CHANGESET_OPS, MAX_INSERT_BYTES, LspPosition,
 };
 pub use event::{EventClient, EventEnvelope, EventSubscription, ShaderEvent};
+pub use error::{NuiFlowCompileError, NuiFlowCompileReport, NuiFlowDiagnostic, NuiFlowDiagnosticSpan, NuiFlowError};
 pub use render::{ExternalSurface, RenderClient, ShaderPackage, ShaderParameter, SurfaceKind, SurfaceOpen, SurfaceSize, shader_source_digest};
 pub use session::{IntentResult, PatchOp, PublishResult, UiProgram, UiProgramRevision, UiSession, UiTarget, mount_flow_file, patch_flow_ops};
+pub use ui_patch::{ActiveView, AgentWorkbenchState, TransitionSpec, UiNode, UiPatch, UiPatchOp, WorkbenchEvent};
+pub use tree::{TreeFrame, TreeIntent, TreeNode, TreeNodeState, TreeWindow};
+pub use diff::{DiffFrame, DiffHunk, DiffIntent, DiffLayout, DiffLine, DiffLineKind, DiffStatus};
+pub use conversation::{ChunkResult, ConversationChunk, ConversationDiagnostic, ConversationDiagnosticKind, ConversationFrame, ConversationIntent, ConversationMessage, ConversationStream, ConversationWindow, MessageRole, MessageSegment, MessageState};
+pub use approval::{AgentToolCall, ApprovalIntent, ApprovalPrompt, ApprovalState, RiskLevel, ToolCallState};
 pub use wire::{ClientIdentity, RpcError, RpcFailure, RpcRequest, RpcResponse, Version};

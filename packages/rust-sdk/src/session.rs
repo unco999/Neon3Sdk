@@ -3,7 +3,14 @@
 //! `ui.input.frame` with strict input-revision bookkeeping.
 
 use crate::client::NeonClient;
+use crate::constants::method as m;
+use crate::error::{NuiFlowCompileReport, NuiFlowError};
 use crate::wire::RpcFailure;
+use crate::ui_patch::UiPatch;
+use crate::tree::TreeIntent;
+use crate::diff::DiffIntent;
+use crate::conversation::ConversationIntent;
+use crate::approval::ApprovalIntent;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -53,24 +60,60 @@ impl UiSession {
         Self { input_revision: 0, program: None, target }
     }
 
+    /// Run the public NUI Flow compile gate without activating the program.
+    ///
+    /// Parse/compile failures return `NuiFlowError::Compile`, whose `report`
+    /// contains the exact structured diagnostics from `error.details`.
+    pub fn compile_flow(
+        &mut self,
+        client: &mut NeonClient,
+        source: &str,
+    ) -> Result<NuiFlowCompileReport, NuiFlowError> {
+        let response = client
+            .call(self.target.as_str(), m::UI_FLOW_COMPILE, json!({"source": source}))
+            .map_err(NuiFlowError::Transport)?;
+        let result = response
+            .ok()
+            .map_err(NuiFlowError::from_rpc_failure)?;
+        serde_json::from_value(result)
+            .map_err(|e| NuiFlowError::Decode(format!("decode {} result: {e}", m::UI_FLOW_COMPILE)))
+    }
+
+    /// Compile and mount a NUI Flow source, preserving structured diagnostics.
+    pub fn mount_flow_checked(
+        &mut self,
+        client: &mut NeonClient,
+        source: &str,
+    ) -> Result<UiProgram, NuiFlowError> {
+        let idem = format!("flow-mount:{}", uuid::Uuid::new_v4());
+        let response = client
+            .call_with_idempotency(
+                self.target.as_str(),
+                m::UI_FLOW_SUBMIT,
+                json!({"source": source}),
+                Some(idem),
+            )
+            .map_err(NuiFlowError::Transport)?;
+        let result = response
+            .ok()
+            .map_err(NuiFlowError::from_rpc_failure)?;
+        let program: UiProgram = serde_json::from_value(result)
+            .map_err(|e| NuiFlowError::Decode(format!("parse {} result: {e}", m::UI_FLOW_SUBMIT)))?;
+        self.program = Some(program.clone());
+        Ok(program)
+    }
+
     /// Compile and mount a NUI Flow source on the host.
+    ///
+    /// This legacy entry point keeps its `String` error signature. New code
+    /// should use `mount_flow_checked` to inspect `NuiFlowCompileError.report`.
     pub fn mount_flow(
         &mut self,
         client: &mut NeonClient,
         source: &str,
     ) -> Result<UiProgram, String> {
-        let idem = format!("flow-mount:{}", uuid::Uuid::new_v4());
-        let response = client.call_with_idempotency(
-            self.target.as_str(),
-            "ui.flow.submit",
-            json!({"source": source}),
-            Some(idem),
-        )?;
-        let result = response.ok().map_err(|f: RpcFailure| f.to_string())?;
-        let program: UiProgram = serde_json::from_value(result)
-            .map_err(|e| format!("parse ui.flow.submit result: {e}"))?;
-        self.program = Some(program.clone());
-        Ok(program)
+        self.mount_flow_checked(client, source)
+            .map_err(|error| error.to_string())
     }
 
     /// Dispatch a semantic intent to the host (`ui.host.inbound`).
@@ -96,7 +139,7 @@ impl UiSession {
         });
         let response = client.call(
             self.target.as_str(),
-            "ui.host.inbound",
+            m::UI_HOST_INBOUND,
             json!({"kind": "semantic_intent", "event": event}),
         )?;
         let status = response.status.clone();
@@ -122,7 +165,7 @@ impl UiSession {
     ) -> Result<PublishResult, String> {
         let response = client.call(
             self.target.as_str(),
-            "ui.input.frame",
+            m::UI_INPUT_FRAME,
             json!({
                 "program_revision": self.program.as_ref().map(|p| {
                     json!({"program_id": p.program_revision.program_id, "revision": p.program_revision.revision})
@@ -139,7 +182,7 @@ impl UiSession {
             // Stale: refresh the host input revision and retry once.
             let snapshot = client.call(
                 self.target.as_str(),
-                "debug.ui.host.snapshot",
+                m::DEBUG_UI_HOST_SNAPSHOT,
                 json!({}),
             )?;
             if let Ok(value) = snapshot.ok() {
@@ -157,6 +200,39 @@ impl UiSession {
             .unwrap_or(self.input_revision + 1);
         self.input_revision = accepted;
         Ok(PublishResult { status, input_revision: accepted, result })
+    }
+
+    /// Apply the formal versioned patch contract without rebuilding Flow.
+    pub fn patch(&mut self, client: &mut NeonClient, patch: &UiPatch) -> Result<Value, String> {
+        patch.validate()?;
+        let response = client.call_with_idempotency(
+            self.target.as_str(),
+            m::UI_FLOW_PATCH,
+            serde_json::to_value(patch).map_err(|e| format!("encode ui patch: {e}"))?,
+            Some(format!("ui-patch:{}:{}", patch.surface_id, uuid::Uuid::new_v4())),
+        )?;
+        response.ok().map_err(|f: RpcFailure| f.to_string())
+    }
+
+    /// Send a revisioned TreeView intent through the existing semantic event
+    /// channel. The renderer never becomes the authority for tree state.
+    pub fn dispatch_tree_intent(&mut self, client: &mut NeonClient, intent: &TreeIntent) -> Result<IntentResult, String> {
+        self.dispatch_intent(client, intent.name(), intent.payload())
+    }
+
+    /// Send a patch-review intent through the semantic event channel.
+    pub fn dispatch_diff_intent(&mut self, client: &mut NeonClient, intent: &DiffIntent) -> Result<IntentResult, String> {
+        self.dispatch_intent(client, intent.name(), intent.payload())
+    }
+
+    /// Send a conversation action through the semantic event channel.
+    pub fn dispatch_conversation_intent(&mut self, client: &mut NeonClient, intent: &ConversationIntent) -> Result<IntentResult, String> {
+        self.dispatch_intent(client, intent.name(), intent.payload())
+    }
+
+    /// Send a tool approval or execution action through semantic intents.
+    pub fn dispatch_approval_intent(&mut self, client: &mut NeonClient, intent: &ApprovalIntent) -> Result<IntentResult, String> {
+        self.dispatch_intent(client, intent.name(), intent.payload())
     }
 }
 
